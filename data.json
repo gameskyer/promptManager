@@ -1,0 +1,11 @@
+{
+	"atoms": [
+    {
+      "value": "masterpiece",
+      "label": "杰作",
+      "type": "Positive",
+      "category": "质量",
+      "synonyms": ["best quality"]
+    }
+  ]
+}

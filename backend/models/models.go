@@ -1,0 +1,191 @@
+package models
+
+import (
+	"database/sql/driver"
+	"encoding/json"
+	"time"
+)
+
+// JSON type for storing JSON in SQLite
+type JSON map[string]interface{}
+
+// Value implements the driver.Valuer interface
+func (j JSON) Value() (driver.Value, error) {
+	if j == nil {
+		return nil, nil
+	}
+	return json.Marshal(j)
+}
+
+// Scan implements the sql.Scanner interface
+func (j *JSON) Scan(value interface{}) error {
+	if value == nil {
+		*j = nil
+		return nil
+	}
+	bytes, ok := value.([]byte)
+	if !ok {
+		return nil
+	}
+	return json.Unmarshal(bytes, j)
+}
+
+// StringSlice type for storing string arrays
+type StringSlice []string
+
+// Value implements the driver.Valuer interface
+func (s StringSlice) Value() (driver.Value, error) {
+	if s == nil {
+		return "[]", nil
+	}
+	bytes, err := json.Marshal(s)
+	if err != nil {
+		return nil, err
+	}
+	return string(bytes), nil
+}
+
+// Scan implements the sql.Scanner interface
+func (s *StringSlice) Scan(value interface{}) error {
+	if value == nil {
+		*s = nil
+		return nil
+	}
+	bytes, ok := value.([]byte)
+	if !ok {
+		str, ok := value.(string)
+		if !ok {
+			return nil
+		}
+		bytes = []byte(str)
+	}
+	return json.Unmarshal(bytes, s)
+}
+
+// Category represents a hierarchical category
+type Category struct {
+	ID         uint      `gorm:"primarykey" json:"id"`
+	Name       string    `gorm:"size:100;not null" json:"name"`
+	ParentID   uint      `gorm:"default:0;index" json:"parent_id"`
+	Type       string    `gorm:"size:20;not null" json:"type"` // ATOM or PRESET
+	SortOrder  int       `gorm:"default:0" json:"sort_order"`
+	CreatedAt  time.Time `json:"created_at"`
+	UpdatedAt  time.Time `json:"updated_at"`
+}
+
+// Atom represents an atomic prompt word
+type Atom struct {
+	ID          uint        `gorm:"primarykey" json:"id"`
+	Value       string      `gorm:"size:200;not null;uniqueIndex" json:"value"` // English word
+	Label       string      `gorm:"size:200" json:"label"`                      // Chinese label
+	Synonyms    StringSlice `gorm:"type:text" json:"synonyms"`                  // JSON array of synonyms
+	Type        string      `gorm:"size:20;not null;default:'Positive'" json:"type"` // Positive or Negative
+	CategoryID  uint        `gorm:"index" json:"category_id"`
+	UsageCount  int         `gorm:"default:0" json:"usage_count"`
+	LastUsedAt  *time.Time  `json:"last_used_at"`
+	CreatedAt   time.Time   `json:"created_at"`
+	UpdatedAt   time.Time   `json:"updated_at"`
+	
+	// Relationships
+	Category    Category    `gorm:"foreignKey:CategoryID" json:"category,omitempty"`
+}
+
+// Preset represents a prompt preset
+type Preset struct {
+	ID              uint      `gorm:"primarykey" json:"id"`
+	Title           string    `gorm:"size:200;not null" json:"title"`
+	CurrentVersion  int       `gorm:"default:0" json:"current_version"`
+	CreatedAt       time.Time `json:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
+	IsDeleted       bool      `gorm:"default:false" json:"is_deleted"`
+	
+	// Relationships
+	Versions        []PresetVersion `gorm:"foreignKey:PresetID" json:"versions,omitempty"`
+}
+
+// PresetVersion represents a version snapshot of a preset
+type PresetVersion struct {
+	ID             uint      `gorm:"primarykey" json:"id"`
+	PresetID       uint      `gorm:"not null;index" json:"preset_id"`
+	VersionNum     int       `gorm:"not null" json:"version_num"` // V1=1, V2=2, etc.
+	Snapshot       JSON      `gorm:"type:text" json:"snapshot"`   // Full JSON snapshot
+	ThumbnailPath  string    `gorm:"size:500" json:"thumbnail_path"`
+	IsStarred      bool      `gorm:"default:false" json:"is_starred"`
+	CreatedAt      time.Time `json:"created_at"`
+	DiffStats      string    `gorm:"size:20" json:"diff_stats"`   // e.g., "+2/-1"
+	
+	// Relationships
+	Preset         Preset    `gorm:"foreignKey:PresetID" json:"preset,omitempty"`
+	Previews       []Preview `gorm:"foreignKey:VersionID" json:"previews,omitempty"`
+}
+
+// SnapshotData represents the structure of the JSON snapshot
+type SnapshotData struct {
+	PosText      string                 `json:"pos_text"`
+	NegText      string                 `json:"neg_text"`
+	Params       map[string]interface{} `json:"params"`
+	PreviewPaths []string               `json:"preview_paths"`
+	AtomIDs      []uint                 `json:"atom_ids"`
+}
+
+// Preview represents a preview image
+type Preview struct {
+	ID         uint      `gorm:"primarykey" json:"id"`
+	PresetID   uint      `gorm:"index" json:"preset_id"`
+	VersionID  *uint     `gorm:"index" json:"version_id,omitempty"`
+	FilePath   string    `gorm:"size:500;not null" json:"file_path"`
+	CreatedAt  time.Time `json:"created_at"`
+}
+
+// UsageStat tracks usage statistics for atoms
+type UsageStat struct {
+	ID         uint      `gorm:"primarykey" json:"id"`
+	AtomID     uint      `gorm:"uniqueIndex;not null" json:"atom_id"`
+	UseCount   int       `gorm:"default:0" json:"use_count"`
+	LastUsedAt time.Time `json:"last_used_at"`
+}
+
+// ToSnapshotData converts JSON snapshot to SnapshotData
+func (pv *PresetVersion) ToSnapshotData() (*SnapshotData, error) {
+	if pv.Snapshot == nil {
+		return &SnapshotData{}, nil
+	}
+	
+	data := &SnapshotData{}
+	if posText, ok := pv.Snapshot["pos_text"].(string); ok {
+		data.PosText = posText
+	}
+	if negText, ok := pv.Snapshot["neg_text"].(string); ok {
+		data.NegText = negText
+	}
+	if params, ok := pv.Snapshot["params"].(map[string]interface{}); ok {
+		data.Params = params
+	}
+	if paths, ok := pv.Snapshot["preview_paths"].([]interface{}); ok {
+		for _, p := range paths {
+			if str, ok := p.(string); ok {
+				data.PreviewPaths = append(data.PreviewPaths, str)
+			}
+		}
+	}
+	if ids, ok := pv.Snapshot["atom_ids"].([]interface{}); ok {
+		for _, id := range ids {
+			if num, ok := id.(float64); ok {
+				data.AtomIDs = append(data.AtomIDs, uint(num))
+			}
+		}
+	}
+	return data, nil
+}
+
+// SetSnapshotData sets the snapshot from SnapshotData
+func (pv *PresetVersion) SetSnapshotData(data *SnapshotData) error {
+	pv.Snapshot = JSON{
+		"pos_text":      data.PosText,
+		"neg_text":      data.NegText,
+		"params":        data.Params,
+		"preview_paths": data.PreviewPaths,
+		"atom_ids":      data.AtomIDs,
+	}
+	return nil
+}
