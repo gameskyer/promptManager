@@ -203,12 +203,18 @@ function closeAtomDialog() {
 }
 
 async function saveAtom(data) {
-  if (data.id) {
-    await atomStore.updateAtom(data.id, data)
-  } else {
-    await atomStore.createAtom(data)
+  try {
+    if (data.id) {
+      await atomStore.updateAtom(data.id, data)
+    } else {
+      await atomStore.createAtom(data)
+    }
+    closeAtomDialog()
+    await atomStore.fetchAtoms()
+  } catch (error) {
+    console.error('Failed to save atom:', error)
+    alert('保存失败: ' + error.message)
   }
-  closeAtomDialog()
 }
 
 async function deleteAtom(id) {
