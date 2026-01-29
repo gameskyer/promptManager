@@ -25,7 +25,9 @@ func (s *AtomService) CreateAtom(value, label, atomType string, categoryID uint,
 		Label:      label,
 		Type:       atomType,
 		CategoryID: categoryID,
-		Synonyms:   synonyms,
+		Synonyms:   models.StringSlice(synonyms),
+		CreatedAt:  time.Now(),
+		UpdatedAt:  time.Now(),
 	}
 	
 	if err := s.db.Create(atom).Error; err != nil {
