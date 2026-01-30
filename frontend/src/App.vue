@@ -11,6 +11,8 @@
       <!-- Main Content - 根据当前视图显示不同内容 -->
       <MainContent v-if="currentView === 'atoms'" />
       <PresetList v-else-if="currentView === 'presets'" />
+      <AtomManagement v-else-if="currentView === 'atom-management'" />
+      <CategoryManagement v-else-if="currentView === 'category-management'" />
       
       <!-- Right Workbench -->
       <Workbench v-if="currentView === 'atoms'" />
@@ -30,6 +32,8 @@ import TopBar from './components/TopBar.vue'
 import SideMenu from './components/SideMenu.vue'
 import MainContent from './components/MainContent.vue'
 import PresetList from './components/PresetList.vue'
+import AtomManagement from './components/AtomManagement.vue'
+import CategoryManagement from './components/CategoryManagement.vue'
 import Workbench from './components/Workbench.vue'
 import Timeline from './components/Timeline.vue'
 
@@ -41,7 +45,7 @@ const aiStore = useAIStore()
 
 const { showTimeline } = storeToRefs(appStore)
 
-const currentView = ref('atoms') // 'atoms' | 'presets'
+const currentView = ref('atoms') // 'atoms' | 'presets' | 'atom-management' | 'category-management'
 const sideMenu = ref(null)
 
 function handleViewChange(view) {

@@ -84,6 +84,38 @@
         </div>
       </div>
     </div>
+    
+    <div class="menu-divider"></div>
+    
+    <div class="menu-section">
+      <div class="section-header">
+        <span class="section-title">管理</span>
+      </div>
+      <div class="menu-tree">
+        <div
+          class="menu-item"
+          :class="{ active: currentView === 'atom-management' }"
+          @click="selectAtomManagementView"
+        >
+          <div class="menu-item-header">
+            <DocumentTextIcon class="w-4 h-4 icon text-emerald-400" />
+            <span class="item-label">原子词管理</span>
+            <span v-if="atomCount > 0" class="count-badge">{{ atomCount }}</span>
+          </div>
+        </div>
+        <div
+          class="menu-item"
+          :class="{ active: currentView === 'category-management' }"
+          @click="selectCategoryManagementView"
+        >
+          <div class="menu-item-header">
+            <FolderIcon class="w-4 h-4 icon text-violet-400" />
+            <span class="item-label">分类管理</span>
+            <span v-if="categoryCount > 0" class="count-badge">{{ categoryCount }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
   </aside>
   
   <!-- CURD Dialogs -->
@@ -107,6 +139,7 @@ import {
   PlusIcon,
   PencilIcon,
   SwatchIcon,
+  DocumentTextIcon,
 } from '@heroicons/vue/24/outline'
 import { useAppStore, useCategoryStore, useAtomStore, usePresetStore } from '../stores'
 import CategoryDialog from './CategoryDialog.vue'
@@ -119,11 +152,12 @@ const atomStore = useAtomStore()
 const presetStore = usePresetStore()
 
 const { currentCategory, currentSubCategory } = storeToRefs(appStore)
-const { rootCategories } = storeToRefs(categoryStore)
+const { rootCategories, categories } = storeToRefs(categoryStore)
 const { activePresets } = storeToRefs(presetStore)
+const { atoms } = storeToRefs(atomStore)
 
 const expandedCategories = ref([1])
-const currentView = ref('atoms') // 'atoms' | 'presets'
+const currentView = ref('atoms') // 'atoms' | 'presets' | 'atom-management' | 'category-management'
 
 // Dialog states
 const showCategoryDialog = ref(false)
@@ -134,6 +168,9 @@ const presetCount = computed(() => activePresets.value.length)
 const atomRootCategories = computed(() =>
   rootCategories.value.filter(c => c.type === 'ATOM')
 )
+
+const atomCount = computed(() => atoms.value.length)
+const categoryCount = computed(() => categories.value.length)
 
 function toggleExpand(categoryId) {
   const index = expandedCategories.value.indexOf(categoryId)
@@ -169,6 +206,20 @@ function selectPresetsView() {
   appStore.setCategory(null)
   appStore.setSubCategory(null)
   appStore.activeTab = 'presets'
+}
+
+function selectAtomManagementView() {
+  currentView.value = 'atom-management'
+  emit('view-change', 'atom-management')
+  appStore.setCategory(null)
+  appStore.setSubCategory(null)
+}
+
+function selectCategoryManagementView() {
+  currentView.value = 'category-management'
+  emit('view-change', 'category-management')
+  appStore.setCategory(null)
+  appStore.setSubCategory(null)
 }
 
 // Category CURD
