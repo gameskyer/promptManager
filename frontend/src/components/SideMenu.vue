@@ -69,17 +69,44 @@
     <div class="menu-section">
       <div class="section-header">
         <span class="section-title">预设库</span>
+        <button class="add-btn" @click="createPresetCategory" title="新建预设分类">
+          <PlusIcon class="w-3 h-3" />
+        </button>
       </div>
       <div class="menu-tree">
+        <!-- 全部预设 -->
         <div
           class="menu-item"
-          :class="{ active: currentView === 'presets' }"
-          @click="selectPresetsView"
+          :class="{ active: currentView === 'presets' && currentPresetCategory === 0 }"
+          @click="selectPresetsView(0)"
         >
           <div class="menu-item-header">
             <SwatchIcon class="w-4 h-4 icon text-amber-400" />
-            <span class="item-label">我的预设</span>
+            <span class="item-label">全部预设</span>
             <span v-if="presetCount > 0" class="count-badge">{{ presetCount }}</span>
+          </div>
+        </div>
+        
+        <!-- 预设分类列表 -->
+        <div
+          v-for="category in presetRootCategories"
+          :key="category.id"
+          class="menu-item"
+          :class="{ active: currentView === 'presets' && currentPresetCategory === category.id }"
+          @click="selectPresetsView(category.id)"
+        >
+          <div class="menu-item-header">
+            <FolderIcon class="w-4 h-4 icon text-amber-300" />
+            <span class="item-label">{{ category.name }}</span>
+            <span v-if="getPresetCountByCategory(category.id) > 0" class="count-badge">
+              {{ getPresetCountByCategory(category.id) }}
+            </span>
+            <button 
+              class="edit-btn"
+              @click.stop="editCategory(category)"
+            >
+              <PencilIcon class="w-3 h-3" />
+            </button>
           </div>
         </div>
       </div>
@@ -144,7 +171,7 @@ import {
 import { useAppStore, useCategoryStore, useAtomStore, usePresetStore } from '../stores'
 import CategoryDialog from './CategoryDialog.vue'
 
-const emit = defineEmits(['view-change'])
+const emit = defineEmits(['view-change', 'select-preset-category'])
 
 const appStore = useAppStore()
 const categoryStore = useCategoryStore()
@@ -169,8 +196,18 @@ const atomRootCategories = computed(() =>
   rootCategories.value.filter(c => c.type === 'ATOM')
 )
 
+const presetRootCategories = computed(() =>
+  rootCategories.value.filter(c => c.type === 'PRESET')
+)
+
 const atomCount = computed(() => atoms.value.length)
 const categoryCount = computed(() => categories.value.length)
+
+const currentPresetCategory = ref(0)
+
+function getPresetCountByCategory(categoryId) {
+  return activePresets.value.filter(p => p.category_id === categoryId).length
+}
 
 function toggleExpand(categoryId) {
   const index = expandedCategories.value.indexOf(categoryId)
@@ -199,13 +236,21 @@ async function selectSubCategory(subCategory) {
   await atomStore.fetchAtoms(subCategory.id)
 }
 
-function selectPresetsView() {
+function selectPresetsView(categoryId = 0) {
   currentView.value = 'presets'
+  currentPresetCategory.value = categoryId
   emit('view-change', 'presets')
   appStore.setCurrentPreset(null)
   appStore.setCategory(null)
   appStore.setSubCategory(null)
   appStore.activeTab = 'presets'
+  // 传递分类ID给父组件
+  emit('select-preset-category', categoryId)
+}
+
+function createPresetCategory() {
+  editingCategory.value = { type: 'PRESET', parent_id: 0 }
+  showCategoryDialog.value = true
 }
 
 function selectAtomManagementView() {

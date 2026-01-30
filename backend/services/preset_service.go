@@ -24,9 +24,10 @@ func NewPresetService(db *gorm.DB) *PresetService {
 }
 
 // CreatePreset creates a new preset with initial version
-func (s *PresetService) CreatePreset(title, posText, negText string, atomIDs []uint, params map[string]interface{}, previewBase64s []string) (*models.Preset, error) {
+func (s *PresetService) CreatePreset(title string, categoryID uint, posText, negText string, atomIDs []uint, params map[string]interface{}, previewBase64s []string) (*models.Preset, error) {
 	preset := &models.Preset{
-		Title: title,
+		Title:      title,
+		CategoryID: categoryID,
 	}
 	
 	var previewPaths []string
@@ -94,13 +95,18 @@ func (s *PresetService) GetPresetByID(id uint) (*models.Preset, error) {
 }
 
 // GetPresets retrieves presets with pagination
-func (s *PresetService) GetPresets(page, pageSize int, includeDeleted bool) ([]models.Preset, int64, error) {
+func (s *PresetService) GetPresets(page, pageSize int, categoryID uint, includeDeleted bool) ([]models.Preset, int64, error) {
 	var presets []models.Preset
 	var total int64
 	
 	query := s.db.Model(&models.Preset{})
 	if !includeDeleted {
 		query = query.Where("is_deleted = ?", false)
+	}
+	
+	// Filter by category if specified
+	if categoryID > 0 {
+		query = query.Where("category_id = ?", categoryID)
 	}
 	
 	query.Count(&total)
@@ -113,16 +119,22 @@ func (s *PresetService) GetPresets(page, pageSize int, includeDeleted bool) ([]m
 	return presets, total, nil
 }
 
+// GetPresetsByCategory retrieves presets by category ID
+func (s *PresetService) GetPresetsByCategory(categoryID uint, page, pageSize int) ([]models.Preset, int64, error) {
+	return s.GetPresets(page, pageSize, categoryID, false)
+}
+
 // UpdatePreset updates a preset's basic info
-func (s *PresetService) UpdatePreset(id uint, title string) (*models.Preset, error) {
+func (s *PresetService) UpdatePreset(id uint, title string, categoryID uint) (*models.Preset, error) {
 	var preset models.Preset
 	if err := s.db.First(&preset, id).Error; err != nil {
 		return nil, err
 	}
 	
 	updates := map[string]interface{}{
-		"title":      title,
-		"updated_at": time.Now(),
+		"title":       title,
+		"category_id": categoryID,
+		"updated_at":  time.Now(),
 	}
 	
 	if err := s.db.Model(&preset).Updates(updates).Error; err != nil {
@@ -195,7 +207,7 @@ func (s *PresetService) GetCurrentWorkState(presetID uint) (*models.SnapshotData
 }
 
 // ForkPreset creates a new preset based on an existing version
-func (s *PresetService) ForkPreset(presetID uint, versionNum int, newTitle string) (*models.Preset, error) {
+func (s *PresetService) ForkPreset(presetID uint, versionNum int, newTitle string, categoryID uint) (*models.Preset, error) {
 	var sourceVersion models.PresetVersion
 	if err := s.db.Where("preset_id = ? AND version_num = ?", presetID, versionNum).
 		First(&sourceVersion).Error; err != nil {
@@ -207,7 +219,7 @@ func (s *PresetService) ForkPreset(presetID uint, versionNum int, newTitle strin
 		return nil, err
 	}
 	
-	return s.CreatePreset(newTitle, snapshot.PosText, snapshot.NegText, snapshot.AtomIDs, snapshot.Params, snapshot.PreviewPaths)
+	return s.CreatePreset(newTitle, categoryID, snapshot.PosText, snapshot.NegText, snapshot.AtomIDs, snapshot.Params, snapshot.PreviewPaths)
 }
 
 // CleanupOldVersions removes old versions based on retention policy

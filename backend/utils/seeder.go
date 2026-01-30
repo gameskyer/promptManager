@@ -433,6 +433,7 @@ func (s *Seeder) seedPresets() error {
 	for _, preset := range presets {
 		_, err := s.presetService.CreatePreset(
 			preset.title,
+			0, // categoryID - default to 0 for seed data
 			preset.posText,
 			preset.negText,
 			[]uint{}, // atom IDs

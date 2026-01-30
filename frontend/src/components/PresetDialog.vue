@@ -53,14 +53,30 @@
             </div>
           </div>
           
-          <div class="form-group">
-            <label>预设标题 <span class="required">*</span></label>
-            <input 
-              v-model="form.title" 
-              type="text" 
-              placeholder="如：动漫女孩基础预设"
-              required
-            />
+          <div class="form-row">
+            <div class="form-group" style="flex: 1;">
+              <label>预设标题 <span class="required">*</span></label>
+              <input 
+                v-model="form.title" 
+                type="text" 
+                placeholder="如：动漫女孩基础预设"
+                required
+              />
+            </div>
+            
+            <div class="form-group" style="width: 160px;">
+              <label>分类</label>
+              <select v-model.number="form.category_id">
+                <option :value="0">未分类</option>
+                <option 
+                  v-for="cat in presetCategories" 
+                  :key="cat.id" 
+                  :value="cat.id"
+                >
+                  {{ cat.name }}
+                </option>
+              </select>
+            </div>
           </div>
           
           <div class="form-group">
@@ -192,7 +208,8 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
+import { storeToRefs } from 'pinia'
 import {
   XMarkIcon,
   PlusIcon,
@@ -201,6 +218,7 @@ import {
   StarIcon,
 } from '@heroicons/vue/24/outline'
 import ImageViewer from './ImageViewer.vue'
+import { useCategoryStore } from '../stores'
 
 
 const props = defineProps({
@@ -208,14 +226,26 @@ const props = defineProps({
     type: Object,
     default: null,
   },
+  defaultCategoryId: {
+    type: Number,
+    default: 0,
+  },
 })
 
 const emit = defineEmits(['close', 'save', 'delete'])
 
+const categoryStore = useCategoryStore()
+const { categories } = storeToRefs(categoryStore)
+
 const isEdit = computed(() => !!props.preset)
+
+const presetCategories = computed(() =>
+  categories.value.filter(c => c.type === 'PRESET')
+)
 
 const form = ref({
   title: '',
+  category_id: 0,
   pos_text: '',
   neg_text: '',
   params: {
@@ -236,6 +266,7 @@ watch(() => props.preset, (newPreset) => {
   if (newPreset) {
     form.value = {
       title: newPreset.title || '',
+      category_id: newPreset.category_id || 0,
       pos_text: newPreset.pos_text || '',
       neg_text: newPreset.neg_text || '',
       params: {
@@ -255,6 +286,7 @@ watch(() => props.preset, (newPreset) => {
   } else {
     form.value = {
       title: '',
+      category_id: props.defaultCategoryId,
       pos_text: '',
       neg_text: '',
       params: {
@@ -269,6 +301,12 @@ watch(() => props.preset, (newPreset) => {
     }
   }
 }, { immediate: true })
+
+onMounted(async () => {
+  if (categoryStore.categories.length === 0) {
+    await categoryStore.fetchCategories()
+  }
+})
 
 // 预览图操作 - 使用 base64 存储，保存时提交到后端
 function addPreview() {

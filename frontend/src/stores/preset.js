@@ -36,13 +36,14 @@ export const usePresetStore = defineStore('preset', () => {
   )
 
   // Actions
-  async function fetchPresets(page = 1, pageSize = 20, includeDeleted = false) {
+  async function fetchPresets(page = 1, pageSize = 20, categoryId = 0, includeDeleted = false) {
     loading.value = true
     error.value = null
     try {
       const response = await GetPresets({
         page: page,
         page_size: pageSize,
+        category_id: categoryId,
         include_deleted: includeDeleted,
       })
       
@@ -82,7 +83,7 @@ export const usePresetStore = defineStore('preset', () => {
     }
   }
 
-  async function createPreset(title, posText, negText, atomIDs, params, loras = [], previews = []) {
+  async function createPreset(title, categoryId, posText, negText, atomIDs, params, loras = [], previews = []) {
     loading.value = true
     error.value = null
     try {
@@ -94,6 +95,7 @@ export const usePresetStore = defineStore('preset', () => {
       
       const response = await CreatePreset({
         title: title,
+        category_id: categoryId,
         pos_text: posText,
         neg_text: negText,
         atom_ids: atomIDs,
@@ -115,13 +117,14 @@ export const usePresetStore = defineStore('preset', () => {
     }
   }
 
-  async function updatePreset(id, title) {
+  async function updatePreset(id, title, categoryId = 0) {
     loading.value = true
     error.value = null
     try {
       const response = await UpdatePreset({
         id: id,
         title: title,
+        category_id: categoryId,
       })
       
       if (response.success) {

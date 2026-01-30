@@ -26,17 +26,18 @@ type PresetResponse struct {
 
 // CreatePresetRequest represents a create preset request
 type CreatePresetRequest struct {
-	Title    string                 `json:"title"`
-	PosText  string                 `json:"pos_text"`
-	NegText  string                 `json:"neg_text"`
-	AtomIDs  []uint                 `json:"atom_ids"`
-	Params   map[string]interface{} `json:"params"`
-	Previews []string               `json:"previews"` // base64 encoded images
+	Title      string                 `json:"title"`
+	CategoryID uint                   `json:"category_id"`
+	PosText    string                 `json:"pos_text"`
+	NegText    string                 `json:"neg_text"`
+	AtomIDs    []uint                 `json:"atom_ids"`
+	Params     map[string]interface{} `json:"params"`
+	Previews   []string               `json:"previews"` // base64 encoded images
 }
 
 // CreatePreset creates a new preset
 func (h *PresetHandler) CreatePreset(req CreatePresetRequest) PresetResponse {
-	preset, err := h.service.CreatePreset(req.Title, req.PosText, req.NegText, req.AtomIDs, req.Params, req.Previews)
+	preset, err := h.service.CreatePreset(req.Title, req.CategoryID, req.PosText, req.NegText, req.AtomIDs, req.Params, req.Previews)
 	if err != nil {
 		return PresetResponse{Success: false, Error: err.Error()}
 	}
@@ -66,6 +67,7 @@ func (h *PresetHandler) GetPresetByID(id uint) PresetResponse {
 type GetPresetsRequest struct {
 	Page           int  `json:"page"`
 	PageSize       int  `json:"page_size"`
+	CategoryID     uint `json:"category_id"`
 	IncludeDeleted bool `json:"include_deleted"`
 }
 
@@ -78,7 +80,7 @@ func (h *PresetHandler) GetPresets(req GetPresetsRequest) PresetResponse {
 		req.PageSize = 20
 	}
 	
-	presets, total, err := h.service.GetPresets(req.Page, req.PageSize, req.IncludeDeleted)
+	presets, total, err := h.service.GetPresets(req.Page, req.PageSize, req.CategoryID, req.IncludeDeleted)
 	if err != nil {
 		return PresetResponse{Success: false, Error: err.Error()}
 	}
@@ -101,13 +103,14 @@ func (h *PresetHandler) GetPresets(req GetPresetsRequest) PresetResponse {
 
 // UpdatePresetRequest represents an update preset request
 type UpdatePresetRequest struct {
-	ID    uint   `json:"id"`
-	Title string `json:"title"`
+	ID         uint   `json:"id"`
+	Title      string `json:"title"`
+	CategoryID uint   `json:"category_id"`
 }
 
 // UpdatePreset updates a preset
 func (h *PresetHandler) UpdatePreset(req UpdatePresetRequest) PresetResponse {
-	preset, err := h.service.UpdatePreset(req.ID, req.Title)
+	preset, err := h.service.UpdatePreset(req.ID, req.Title, req.CategoryID)
 	if err != nil {
 		return PresetResponse{Success: false, Error: err.Error()}
 	}
@@ -170,7 +173,13 @@ type ForkPresetRequest struct {
 
 // ForkPreset creates a new preset based on an existing version
 func (h *PresetHandler) ForkPreset(req ForkPresetRequest) PresetResponse {
-	preset, err := h.service.ForkPreset(req.PresetID, req.VersionNum, req.NewTitle)
+	// 获取原预设的分类ID
+	sourcePreset, err := h.service.GetPresetByID(req.PresetID)
+	if err != nil {
+		return PresetResponse{Success: false, Error: err.Error()}
+	}
+	
+	preset, err := h.service.ForkPreset(req.PresetID, req.VersionNum, req.NewTitle, sourcePreset.CategoryID)
 	if err != nil {
 		return PresetResponse{Success: false, Error: err.Error()}
 	}

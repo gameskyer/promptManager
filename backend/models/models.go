@@ -119,12 +119,14 @@ type Atom struct {
 type Preset struct {
 	ID              uint      `gorm:"primarykey" json:"id"`
 	Title           string    `gorm:"size:200;not null" json:"title"`
+	CategoryID      uint      `gorm:"default:0;index" json:"category_id"`
 	CurrentVersion  int       `gorm:"default:0" json:"current_version"`
 	CreatedAt       time.Time `json:"created_at"`
 	UpdatedAt       time.Time `json:"updated_at"`
 	IsDeleted       bool      `gorm:"default:false" json:"is_deleted"`
 	
 	// Relationships
+	Category        Category        `gorm:"foreignKey:CategoryID" json:"category,omitempty"`
 	Versions        []PresetVersion `gorm:"foreignKey:PresetID" json:"versions,omitempty"`
 }
 

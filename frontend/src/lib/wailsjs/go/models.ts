@@ -172,6 +172,7 @@ export namespace handlers {
 	}
 	export class CreatePresetRequest {
 	    title: string;
+	    category_id: number;
 	    pos_text: string;
 	    neg_text: string;
 	    atom_ids: number[];
@@ -185,6 +186,7 @@ export namespace handlers {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.title = source["title"];
+	        this.category_id = source["category_id"];
 	        this.pos_text = source["pos_text"];
 	        this.neg_text = source["neg_text"];
 	        this.atom_ids = source["atom_ids"];
@@ -317,6 +319,7 @@ export namespace handlers {
 	export class GetPresetsRequest {
 	    page: number;
 	    page_size: number;
+	    category_id: number;
 	    include_deleted: boolean;
 	
 	    static createFrom(source: any = {}) {
@@ -327,6 +330,7 @@ export namespace handlers {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.page = source["page"];
 	        this.page_size = source["page_size"];
+	        this.category_id = source["category_id"];
 	        this.include_deleted = source["include_deleted"];
 	    }
 	}
@@ -675,6 +679,7 @@ export namespace handlers {
 	export class UpdatePresetRequest {
 	    id: number;
 	    title: string;
+	    category_id: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new UpdatePresetRequest(source);
@@ -684,6 +689,7 @@ export namespace handlers {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
 	        this.title = source["title"];
+	        this.category_id = source["category_id"];
 	    }
 	}
 	export class UploadImageRequest {
