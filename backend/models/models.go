@@ -3,6 +3,7 @@ package models
 import (
 	"database/sql/driver"
 	"encoding/json"
+	"strings"
 	"time"
 )
 
@@ -51,15 +52,39 @@ func (s *StringSlice) Scan(value interface{}) error {
 		*s = nil
 		return nil
 	}
-	bytes, ok := value.([]byte)
-	if !ok {
-		str, ok := value.(string)
-		if !ok {
-			return nil
-		}
-		bytes = []byte(str)
+	
+	var str string
+	switch v := value.(type) {
+	case []byte:
+		str = string(v)
+	case string:
+		str = v
+	default:
+		return nil
 	}
-	return json.Unmarshal(bytes, s)
+	
+	str = strings.TrimSpace(str)
+	
+	// Handle empty string
+	if str == "" {
+		*s = StringSlice{}
+		return nil
+	}
+	
+	// Try to parse as JSON array
+	if strings.HasPrefix(str, "[") {
+		return json.Unmarshal([]byte(str), s)
+	}
+	
+	// Handle legacy single string format - treat as single-element array
+	// Also handle quoted strings like '"value"'
+	str = strings.Trim(str, `"`)
+	if str != "" {
+		*s = StringSlice{str}
+	} else {
+		*s = StringSlice{}
+	}
+	return nil
 }
 
 // Category represents a hierarchical category
