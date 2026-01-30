@@ -135,6 +135,10 @@
                 <li v-for="(change, i) in result.changes" :key="i">{{ change }}</li>
               </ul>
             </div>
+            <button class="apply-btn" @click="applyToPreset">
+              <CheckIcon class="w-4 h-4" />
+              应用到当前预设
+            </button>
           </div>
           
           <!-- 翻译结果 -->
@@ -200,13 +204,14 @@ import {
   Cog6ToothIcon,
   ExclamationTriangleIcon,
   ClipboardDocumentIcon,
+  CheckIcon,
 } from '@heroicons/vue/24/outline'
 import { useAIStore } from '../stores'
 
 const aiStore = useAIStore()
 const { currentProvider, currentPrompt, isConfigured } = storeToRefs(aiStore)
 
-const emit = defineEmits(['close', 'import', 'open-settings'])
+const emit = defineEmits(['close', 'import', 'open-settings', 'apply-to-preset'])
 
 // 本地状态
 const inputPrompt = ref('')
@@ -302,6 +307,16 @@ function copyResult() {
 // 导入原子词
 function handleImport() {
   emit('import', result.value)
+  emit('close')
+}
+
+// 应用到当前预设
+function applyToPreset() {
+  if (!result.value?.optimized) {
+    alert('没有可应用的优化结果')
+    return
+  }
+  emit('apply-to-preset', result.value)
   emit('close')
 }
 </script>
@@ -779,5 +794,28 @@ function handleImport() {
   overflow-x: auto;
   max-height: 200px;
   overflow-y: auto;
+}
+
+/* Apply to Preset Button */
+.apply-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 12px;
+  margin-top: 12px;
+  background-color: #22c55e;
+  border: none;
+  border-radius: 8px;
+  color: white;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.apply-btn:hover {
+  background-color: #16a34a;
 }
 </style>

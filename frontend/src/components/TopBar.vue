@@ -93,6 +93,7 @@
     v-if="showAIExplode"
     @close="showAIExplode = false"
     @import="handleAIImport"
+    @apply-to-preset="handleApplyToPreset"
     @open-settings="showAISettings"
   />
   
@@ -126,7 +127,7 @@ import {
   Cog6ToothIcon,
   ArrowDownTrayIcon,
 } from '@heroicons/vue/24/outline'
-import { useAppStore, useAtomStore, useCategoryStore, usePresetStore } from '../stores'
+import { useAppStore, useAtomStore, useCategoryStore, usePresetStore, useVersionStore } from '../stores'
 import AtomDialog from './AtomDialog.vue'
 import CategoryDialog from './CategoryDialog.vue'
 import PresetDialog from './PresetDialog.vue'
@@ -138,6 +139,7 @@ const appStore = useAppStore()
 const atomStore = useAtomStore()
 const categoryStore = useCategoryStore()
 const presetStore = usePresetStore()
+const versionStore = useVersionStore()
 
 const { searchQuery: storeSearchQuery, currentCategory, currentSubCategory } = storeToRefs(appStore)
 const searchQuery = ref('')
@@ -294,8 +296,48 @@ async function deletePreset(id) {
   await presetStore.fetchPresets()
 }
 
-function handleAIImport(result) {
+async function handleAIImport(result) {
   console.log('AI Import:', result)
+  
+  if (!result?.atoms || result.atoms.length === 0) {
+    alert('没有可导入的原子词')
+    return
+  }
+  
+  let addedCount = 0
+  let createdCount = 0
+  
+  for (const atomData of result.atoms) {
+    // 检查原子词是否已存在
+    let atom = atomStore.atoms.find(a => a.value === atomData.value)
+    
+    if (!atom) {
+      // 创建新原子词
+      try {
+        const newAtom = await atomStore.createAtom({
+          value: atomData.value,
+          label: atomData.label || atomData.value,
+          type: atomData.type === 'Negative' ? 'Negative' : 'Positive',
+          category_id: 0, // 默认分类
+          synonyms: atomData.synonyms || []
+        })
+        atom = newAtom
+        createdCount++
+      } catch (error) {
+        console.error('创建原子词失败:', error)
+        continue
+      }
+    }
+    
+    // 添加到工作区
+    if (atom) {
+      appStore.addAtom(atom)
+      addedCount++
+    }
+  }
+  
+  alert(`导入完成！新建 ${createdCount} 个原子词，已添加 ${addedCount} 个到工作区`)
+  showAIExplode.value = false
 }
 
 async function handleImported() {
@@ -308,6 +350,43 @@ async function handleImported() {
 function showAISettings() {
   showAIExplode.value = false
   showSettings.value = true
+}
+
+async function handleApplyToPreset(result) {
+  console.log('Apply to preset:', result)
+  
+  if (!result?.optimized) {
+    alert('没有可应用的优化结果')
+    return
+  }
+  
+  // 获取当前预设
+  const currentPreset = appStore.currentPreset
+  if (!currentPreset) {
+    alert('请先选择一个预设')
+    return
+  }
+  
+  // 更新预设的提示词
+  const preset = presetStore.presets.find(p => p.id === currentPreset.id)
+  if (preset) {
+    preset.pos_text = result.optimized
+    // 如果有原提示词，保存到负向词或备注
+    if (result.original && result.original !== result.optimized) {
+      preset.neg_text = `原始提示词: ${result.original}`
+    }
+    
+    // 保存到版本
+    await versionStore.createVersion(preset.id, {
+      pos_text: result.optimized,
+      neg_text: preset.neg_text,
+      params: preset.params || {},
+      atom_ids: []
+    })
+    
+    alert('已应用优化结果到当前预设')
+    showAIExplode.value = false
+  }
 }
 
 if (typeof window !== 'undefined') {
