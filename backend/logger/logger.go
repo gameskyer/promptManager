@@ -7,8 +7,6 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
-
-	"promptmaster/backend/config"
 )
 
 // Logger 提供日志记录功能，支持文件分割
@@ -158,9 +156,9 @@ func (l *Logger) Close() error {
 	return nil
 }
 
-// GetLogDir 返回日志目录
+// GetLogDir 返回日志目录（当前目录下的 logs 文件夹）
 func GetLogDir() string {
-	return filepath.Join(config.AppDataDir, "logs")
+	return "./logs"
 }
 
 // GetAILogPath 返回 AI 日志文件路径
