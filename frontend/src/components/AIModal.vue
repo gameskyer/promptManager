@@ -106,19 +106,39 @@
           
           <!-- 拆解结果 -->
           <div v-if="result.atoms" class="atoms-result">
+            <div class="atoms-header">
+              <span>共 {{ result.atoms.length }} 个原子词</span>
+              <div class="category-legend">
+                <span class="legend-item new">新词</span>
+                <span class="legend-item existing">已存在</span>
+              </div>
+            </div>
             <div
-              v-for="atom in result.atoms"
-              :key="atom.value"
+              v-for="(atom, index) in result.atoms"
+              :key="index"
               class="atom-item"
               :class="{ 'is-new': atom.is_new }"
             >
-              <div class="atom-info">
-                <div class="atom-value">{{ atom.value }}</div>
-                <div class="atom-label">{{ atom.label }}</div>
+              <div class="atom-main">
+                <div class="atom-info">
+                  <div class="atom-value">{{ atom.value }}</div>
+                  <div class="atom-label">{{ atom.label }}</div>
+                </div>
+                <div class="atom-meta">
+                  <span v-if="atom.type" class="atom-type" :class="atom.type">{{ atom.type }}</span>
+                </div>
               </div>
-              <div class="atom-meta">
-                <span class="atom-category">{{ atom.category }}</span>
-                <span v-if="atom.type" class="atom-type" :class="atom.type">{{ atom.type }}</span>
+              <div class="atom-category-row">
+                <label>分类:</label>
+                <select v-model="atom.category" class="category-select">
+                  <option v-for="cat in availableCategories" :key="cat" :value="cat">
+                    {{ cat }}
+                  </option>
+                </select>
+              </div>
+              <div v-if="atom.synonyms?.length" class="atom-synonyms">
+                <span class="synonyms-label">近义词:</span>
+                <span class="synonyms-list">{{ atom.synonyms.join(', ') }}</span>
               </div>
             </div>
           </div>
@@ -206,12 +226,26 @@ import {
   ClipboardDocumentIcon,
   CheckIcon,
 } from '@heroicons/vue/24/outline'
-import { useAIStore } from '../stores'
+import { useAIStore, useCategoryStore } from '../stores'
 
 const aiStore = useAIStore()
+const categoryStore = useCategoryStore()
 const { currentProvider, currentPrompt, isConfigured } = storeToRefs(aiStore)
 
 const emit = defineEmits(['close', 'import', 'open-settings', 'apply-to-preset'])
+
+// 获取可用的分类列表
+const availableCategories = computed(() => {
+  // 从原子词分类中提取
+  const atomCategories = categoryStore.atomCategories
+    .filter(c => c.parent_id > 0) // 只取子分类
+    .map(c => c.name)
+  
+  // 去重并添加默认分类
+  const defaultCategories = ['quality', 'character', 'pose', 'scene', 'clothing', 'prop', 'style', 'lighting', 'other']
+  const allCategories = [...new Set([...atomCategories, ...defaultCategories])]
+  return allCategories
+})
 
 // 本地状态
 const inputPrompt = ref('')
@@ -286,8 +320,12 @@ async function handleSubmit() {
   result.value = null
   
   try {
-    const response = await aiStore.callAI(inputPrompt.value)
-    result.value = response
+    // 如果是拆解模式，传入分类数据
+    if (currentPrompt.value?.id === 'explode') {
+      result.value = await aiStore.explodePrompt(inputPrompt.value, availableCategories.value)
+    } else {
+      result.value = await aiStore.callAI(inputPrompt.value)
+    }
   } catch (err) {
     error.value = err.message || 'AI 调用失败'
     console.error('AI调用错误:', err)
@@ -618,14 +656,46 @@ function applyToPreset() {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  max-height: 300px;
+  max-height: 400px;
   overflow-y: auto;
+}
+
+.atoms-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background-color: #1e293b;
+  border-radius: 6px;
+  font-size: 13px;
+  color: #94a3b8;
+}
+
+.category-legend {
+  display: flex;
+  gap: 12px;
+}
+
+.legend-item {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.legend-item.new {
+  background-color: rgba(124, 58, 237, 0.2);
+  color: #a78bfa;
+}
+
+.legend-item.existing {
+  background-color: rgba(34, 197, 94, 0.2);
+  color: #22c55e;
 }
 
 .atom-item {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  flex-direction: column;
+  gap: 8px;
   padding: 12px;
   background-color: #1e293b;
   border: 1px solid #334155;
@@ -640,6 +710,12 @@ function applyToPreset() {
 .atom-item.is-new {
   border-color: rgba(124, 58, 237, 0.5);
   background-color: rgba(124, 58, 237, 0.1);
+}
+
+.atom-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
 .atom-info {
@@ -665,12 +741,46 @@ function applyToPreset() {
   gap: 8px;
 }
 
-.atom-category {
+.atom-category-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.atom-category-row label {
+  color: #64748b;
+  white-space: nowrap;
+}
+
+.category-select {
+  flex: 1;
+  padding: 4px 8px;
+  background-color: #0f172a;
+  border: 1px solid #475569;
+  border-radius: 4px;
+  color: #e2e8f0;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.category-select:focus {
+  border-color: #0ea5e9;
+  outline: none;
+}
+
+.atom-synonyms {
   font-size: 11px;
   color: #94a3b8;
-  padding: 2px 6px;
-  background-color: rgba(255, 255, 255, 0.05);
-  border-radius: 4px;
+}
+
+.synonyms-label {
+  color: #64748b;
+  margin-right: 4px;
+}
+
+.synonyms-list {
+  color: #94a3b8;
 }
 
 .atom-type {

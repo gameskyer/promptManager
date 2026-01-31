@@ -406,13 +406,14 @@ export const useAIStore = defineStore('ai', () => {
   }
 
   // 拆解提示词
-  async function explodePrompt(prompt, categoryId = null) {
+  async function explodePrompt(prompt, categories = []) {
     const config = buildAIConfig()
     
     isLoading.value = true
     try {
       const response = await ExplodePrompt({
         prompt: prompt,
+        categories: categories,
         config: config,
       })
       

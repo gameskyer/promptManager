@@ -75,11 +75,11 @@ func NewAIService(db *gorm.DB) *AIService {
 }
 
 // ExplodePrompt uses AI to break down a long prompt into atomic words
-func (s *AIService) ExplodePrompt(prompt string, config *AIConfig) (*ExplodeResult, error) {
+func (s *AIService) ExplodePrompt(prompt string, categories []string, config *AIConfig) (*ExplodeResult, error) {
 	if config == nil || config.APIKey == "" {
 		return s.ruleBasedExplosion(prompt)
 	}
-	return s.aiBasedExplosion(prompt, config)
+	return s.aiBasedExplosion(prompt, categories, config)
 }
 
 // OptimizePrompt uses AI to optimize a prompt
@@ -146,8 +146,25 @@ func (s *AIService) ruleBasedExplosion(prompt string) (*ExplodeResult, error) {
 }
 
 // aiBasedExplosion uses AI API to extract atoms
-func (s *AIService) aiBasedExplosion(prompt string, config *AIConfig) (*ExplodeResult, error) {
-	systemPrompt := "You are a prompt engineering expert for AI image generation. Break down the following prompt into atomic components. Rules: 1. Each component should be a single concept or attribute 2. Use English for value field (lowercase, underscore for multi-word) 3. Provide Chinese translation in label field 4. Classify as Positive or Negative type 5. Assign category from: quality, character, pose, scene, clothing, prop, style, lighting, other 6. Include relevant synonyms. Return JSON format strictly: {\"atoms\": [{\"value\": \"masterpiece\", \"label\": \"masterpiece\", \"type\": \"Positive\", \"category\": \"quality\", \"synonyms\": [\"best quality\"]}]}"
+func (s *AIService) aiBasedExplosion(prompt string, categories []string, config *AIConfig) (*ExplodeResult, error) {
+	// 构建分类列表
+	categoryList := "quality, character, pose, scene, clothing, prop, style, lighting, other"
+	if len(categories) > 0 {
+		categoryList = strings.Join(categories, ", ")
+	}
+	
+	systemPrompt := fmt.Sprintf(`You are a prompt engineering expert for AI image generation. Break down the following prompt into atomic components.
+
+Rules:
+1. Each component should be a single concept or attribute
+2. Use English for value field (lowercase, underscore for multi-word)
+3. Provide Chinese translation in label field
+4. Classify as Positive or Negative type
+5. Assign category from available categories: %s
+6. Include relevant synonyms
+
+Return JSON format strictly:
+{"atoms": [{"value": "masterpiece", "label": "杰作", "type": "Positive", "category": "quality", "synonyms": ["best quality"]}]}`, categoryList)
 
 	response, err := s.callAIAPI(config, systemPrompt, prompt)
 	if err != nil {

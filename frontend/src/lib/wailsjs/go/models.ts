@@ -220,6 +220,7 @@ export namespace handlers {
 	}
 	export class ExplodePromptRequest {
 	    prompt: string;
+	    categories?: string[];
 	    config?: services.AIConfig;
 	
 	    static createFrom(source: any = {}) {
@@ -229,6 +230,7 @@ export namespace handlers {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.prompt = source["prompt"];
+	        this.categories = source["categories"];
 	        this.config = this.convertValues(source["config"], services.AIConfig);
 	    }
 	
@@ -269,6 +271,7 @@ export namespace handlers {
 	export class GenericAIRequest {
 	    mode: string;
 	    prompt: string;
+	    categories?: string[];
 	    config?: services.AIConfig;
 	
 	    static createFrom(source: any = {}) {
@@ -279,6 +282,7 @@ export namespace handlers {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.mode = source["mode"];
 	        this.prompt = source["prompt"];
+	        this.categories = source["categories"];
 	        this.config = this.convertValues(source["config"], services.AIConfig);
 	    }
 	
