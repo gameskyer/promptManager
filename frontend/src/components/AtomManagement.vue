@@ -296,8 +296,17 @@ function closeAtomDialog() {
 
 async function saveAtom(data) {
   try {
+    // 构建更新数据，排除 category 对象，只保留 category_id
+    const updateData = {
+      value: data.value,
+      label: data.label,
+      type: data.type,
+      category_id: data.category_id,
+      synonyms: data.synonyms || [],
+    }
+    
     if (data.id) {
-      await atomStore.updateAtom(data.id, data)
+      await atomStore.updateAtom(data.id, updateData)
     } else {
       await atomStore.createAtom(data)
     }

@@ -78,7 +78,31 @@ func (s *AtomService) UpdateAtom(id uint, updates map[string]interface{}) (*mode
 		return nil, err
 	}
 	
-	if err := s.db.Model(&atom).Updates(updates).Error; err != nil {
+	// 过滤允许的字段
+	allowedFields := map[string]bool{
+		"value":       true,
+		"label":       true,
+		"type":        true,
+		"category_id": true,
+		"synonyms":    true,
+	}
+	
+	filteredUpdates := make(map[string]interface{})
+	for key, value := range updates {
+		if allowedFields[key] {
+			filteredUpdates[key] = value
+		}
+	}
+	
+	// 确保有更新时间
+	filteredUpdates["updated_at"] = time.Now()
+	
+	if err := s.db.Model(&atom).Updates(filteredUpdates).Error; err != nil {
+		return nil, err
+	}
+	
+	// 重新加载获取最新数据
+	if err := s.db.Preload("Category").First(&atom, id).Error; err != nil {
 		return nil, err
 	}
 	
