@@ -4,19 +4,22 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"regexp"
 	"strings"
 	"time"
 
+	"promptmaster/backend/logger"
 	"gorm.io/gorm"
 )
 
 // AIService handles AI-powered operations
 type AIService struct {
-	db         *gorm.DB
+	db          *gorm.DB
 	atomService *AtomService
-	httpClient *http.Client
+	httpClient  *http.Client
+	logger      *logger.Logger
 }
 
 // AIConfig holds AI service configuration
@@ -67,10 +70,17 @@ type AnalyzeResult struct {
 
 // NewAIService creates a new AIService
 func NewAIService(db *gorm.DB) *AIService {
+	// 初始化日志记录器（10MB分割）
+	log, err := logger.NewLogger(logger.GetAILogPath(), 10)
+	if err != nil {
+		fmt.Printf("Warning: failed to create AI logger: %v\n", err)
+	}
+	
 	return &AIService{
 		db:          db,
 		atomService: NewAtomService(db),
 		httpClient:  &http.Client{Timeout: 60 * time.Second},
+		logger:      log,
 	}
 }
 
@@ -266,6 +276,8 @@ func (s *AIService) aiBasedAnalysis(prompt string, config *AIConfig) (*AnalyzeRe
 
 // callAIAPI makes the actual API call to AI service
 func (s *AIService) callAIAPI(config *AIConfig, systemPrompt, userPrompt string) (string, error) {
+	startTime := time.Now()
+	
 	endpoint := config.Endpoint
 	if endpoint == "" {
 		endpoint = "https://api.openai.com/v1"
@@ -275,7 +287,7 @@ func (s *AIService) callAIAPI(config *AIConfig, systemPrompt, userPrompt string)
 	if model == "" {
 		model = "gpt-3.5-turbo"
 	}
-
+	
 	requestBody := map[string]interface{}{
 		"model": model,
 		"messages": []map[string]string{
@@ -290,8 +302,16 @@ func (s *AIService) callAIAPI(config *AIConfig, systemPrompt, userPrompt string)
 		return "", err
 	}
 	
+	// 记录请求日志
+	if s.logger != nil {
+		s.logger.LogAIRequest(config.Provider, endpoint+"/chat/completions", model, requestBody)
+	}
+	
 	req, err := http.NewRequest("POST", endpoint+"/chat/completions", bytes.NewBuffer(jsonBody))
 	if err != nil {
+		if s.logger != nil {
+			s.logger.Error(fmt.Sprintf("Failed to create request: %v", err))
+		}
 		return "", err
 	}
 	
@@ -300,13 +320,32 @@ func (s *AIService) callAIAPI(config *AIConfig, systemPrompt, userPrompt string)
 	
 	resp, err := s.httpClient.Do(req)
 	if err != nil {
+		if s.logger != nil {
+			s.logger.Error(fmt.Sprintf("Request failed: %v", err))
+		}
 		return "", err
 	}
 	defer resp.Body.Close()
 	
+	// 读取响应体
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		if s.logger != nil {
+			s.logger.Error(fmt.Sprintf("Failed to read response: %v", err))
+		}
+		return "", err
+	}
+	bodyString := string(bodyBytes)
+	
+	// 记录响应日志
+	duration := time.Since(startTime)
+	if s.logger != nil {
+		s.logger.LogAIResponse(resp.StatusCode, bodyString, duration)
+	}
+	
 	if resp.StatusCode != http.StatusOK {
 		var errResp map[string]interface{}
-		json.NewDecoder(resp.Body).Decode(&errResp)
+		json.Unmarshal(bodyBytes, &errResp)
 		return "", fmt.Errorf("AI API error (%d): %v", resp.StatusCode, errResp)
 	}
 	
@@ -318,7 +357,7 @@ func (s *AIService) callAIAPI(config *AIConfig, systemPrompt, userPrompt string)
 		} `json:"choices"`
 	}
 	
-	if err := json.NewDecoder(resp.Body).Decode(&aiResponse); err != nil {
+	if err := json.Unmarshal(bodyBytes, &aiResponse); err != nil {
 		return "", err
 	}
 	
