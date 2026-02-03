@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"promptmaster/backend/logger"
+
 	"gorm.io/gorm"
 )
 
@@ -75,11 +76,11 @@ func NewAIService(db *gorm.DB) *AIService {
 	if err != nil {
 		fmt.Printf("Warning: failed to create AI logger: %v\n", err)
 	}
-	
+
 	return &AIService{
 		db:          db,
 		atomService: NewAtomService(db),
-		httpClient:  &http.Client{Timeout: 60 * time.Second},
+		httpClient:  &http.Client{Timeout: 180 * time.Second},
 		logger:      log,
 	}
 }
@@ -120,24 +121,24 @@ func (s *AIService) AnalyzePrompt(prompt string, config *AIConfig) (*AnalyzeResu
 func (s *AIService) ruleBasedExplosion(prompt string) (*ExplodeResult, error) {
 	delimiters := regexp.MustCompile(`[,，;；|\/]`)
 	parts := delimiters.Split(prompt, -1)
-	
+
 	var atoms []ExtractedAtom
-	
+
 	for _, part := range parts {
 		part = strings.TrimSpace(part)
 		if part == "" {
 			continue
 		}
-		
+
 		existingAtom, err := s.atomService.GetAtomByValue(strings.ToLower(part))
-		
+
 		atom := ExtractedAtom{
 			Value: part,
 			Label: part,
 			Type:  "Positive",
 			IsNew: err != nil || existingAtom == nil,
 		}
-		
+
 		if err == nil && existingAtom != nil {
 			atom.ExistingID = existingAtom.ID
 			atom.Label = existingAtom.Label
@@ -145,10 +146,10 @@ func (s *AIService) ruleBasedExplosion(prompt string) (*ExplodeResult, error) {
 			atom.Synonyms = existingAtom.Synonyms
 			atom.Category = existingAtom.Category.Name
 		}
-		
+
 		atoms = append(atoms, atom)
 	}
-	
+
 	return &ExplodeResult{
 		Atoms:     atoms,
 		RawPrompt: prompt,
@@ -158,11 +159,11 @@ func (s *AIService) ruleBasedExplosion(prompt string) (*ExplodeResult, error) {
 // aiBasedExplosion uses AI API to extract atoms
 func (s *AIService) aiBasedExplosion(prompt string, categories []string, config *AIConfig) (*ExplodeResult, error) {
 	// 构建分类列表
-	categoryList := "quality, character, pose, scene, clothing, prop, style, lighting, other"
+	categoryList := ""
 	if len(categories) > 0 {
 		categoryList = strings.Join(categories, ", ")
 	}
-	
+
 	systemPrompt := fmt.Sprintf(`You are a prompt engineering expert for AI image generation. Break down the following prompt into atomic components.
 
 Rules:
@@ -189,9 +190,9 @@ Return JSON format strictly:
 		}
 		result.Atoms = atoms
 	}
-	
+
 	result.RawPrompt = prompt
-	
+
 	for i := range result.Atoms {
 		existing, err := s.atomService.GetAtomByValue(strings.ToLower(result.Atoms[i].Value))
 		if err == nil && existing != nil {
@@ -201,7 +202,7 @@ Return JSON format strictly:
 			result.Atoms[i].IsNew = true
 		}
 	}
-	
+
 	return &result, nil
 }
 
@@ -222,7 +223,7 @@ func (s *AIService) aiBasedOptimization(prompt string, config *AIConfig) (*Optim
 			Suggestions: []string{},
 		}, nil
 	}
-	
+
 	return &result, nil
 }
 
@@ -243,7 +244,7 @@ func (s *AIService) aiBasedTranslation(prompt string, config *AIConfig) (*Transl
 			Notes:       "Translated by AI",
 		}, nil
 	}
-	
+
 	return &result, nil
 }
 
@@ -270,24 +271,24 @@ func (s *AIService) aiBasedAnalysis(prompt string, config *AIConfig) (*AnalyzeRe
 			Suggestions: []string{"Please retry"},
 		}, nil
 	}
-	
+
 	return &result, nil
 }
 
 // callAIAPI makes the actual API call to AI service
 func (s *AIService) callAIAPI(config *AIConfig, systemPrompt, userPrompt string) (string, error) {
 	startTime := time.Now()
-	
+
 	endpoint := config.Endpoint
 	if endpoint == "" {
 		endpoint = "https://api.openai.com/v1"
 	}
-	
+
 	model := config.Model
 	if model == "" {
 		model = "gpt-3.5-turbo"
 	}
-	
+
 	requestBody := map[string]interface{}{
 		"model": model,
 		"messages": []map[string]string{
@@ -296,17 +297,17 @@ func (s *AIService) callAIAPI(config *AIConfig, systemPrompt, userPrompt string)
 		},
 		"temperature": 0.3,
 	}
-	
+
 	jsonBody, err := json.Marshal(requestBody)
 	if err != nil {
 		return "", err
 	}
-	
+
 	// 记录请求日志
 	if s.logger != nil {
 		s.logger.LogAIRequest(config.Provider, endpoint+"/chat/completions", model, requestBody)
 	}
-	
+
 	req, err := http.NewRequest("POST", endpoint+"/chat/completions", bytes.NewBuffer(jsonBody))
 	if err != nil {
 		if s.logger != nil {
@@ -314,10 +315,9 @@ func (s *AIService) callAIAPI(config *AIConfig, systemPrompt, userPrompt string)
 		}
 		return "", err
 	}
-	
+
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+config.APIKey)
-	
 	resp, err := s.httpClient.Do(req)
 	if err != nil {
 		if s.logger != nil {
@@ -326,7 +326,7 @@ func (s *AIService) callAIAPI(config *AIConfig, systemPrompt, userPrompt string)
 		return "", err
 	}
 	defer resp.Body.Close()
-	
+
 	// 读取响应体
 	bodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -336,19 +336,19 @@ func (s *AIService) callAIAPI(config *AIConfig, systemPrompt, userPrompt string)
 		return "", err
 	}
 	bodyString := string(bodyBytes)
-	
+
 	// 记录响应日志
 	duration := time.Since(startTime)
 	if s.logger != nil {
 		s.logger.LogAIResponse(resp.StatusCode, bodyString, duration)
 	}
-	
+
 	if resp.StatusCode != http.StatusOK {
 		var errResp map[string]interface{}
 		json.Unmarshal(bodyBytes, &errResp)
 		return "", fmt.Errorf("AI API error (%d): %v", resp.StatusCode, errResp)
 	}
-	
+
 	var aiResponse struct {
 		Choices []struct {
 			Message struct {
@@ -356,15 +356,15 @@ func (s *AIService) callAIAPI(config *AIConfig, systemPrompt, userPrompt string)
 			} `json:"message"`
 		} `json:"choices"`
 	}
-	
+
 	if err := json.Unmarshal(bodyBytes, &aiResponse); err != nil {
 		return "", err
 	}
-	
+
 	if len(aiResponse.Choices) == 0 {
 		return "", fmt.Errorf("no response from AI")
 	}
-	
+
 	return aiResponse.Choices[0].Message.Content, nil
 }
 
@@ -373,7 +373,8 @@ func (s *AIService) extractJSON(content string, v interface{}) error {
 	// Try code blocks
 	re := regexp.MustCompile("`{3}(?:json)?\\s*([\\s\\S]*?)`{3}")
 	matches := re.FindStringSubmatch(content)
-	
+	s.logger.Info("AI Response:" + content)
+
 	var jsonStr string
 	if len(matches) > 1 {
 		jsonStr = matches[1]
@@ -394,7 +395,6 @@ func (s *AIService) extractJSON(content string, v interface{}) error {
 			}
 		}
 	}
-	
 	return json.Unmarshal([]byte(jsonStr), v)
 }
 
@@ -411,7 +411,7 @@ func (s *AIService) ruleBasedOptimization(prompt string) (*OptimizeResult, error
 	terms := strings.Split(prompt, ",")
 	seen := make(map[string]bool)
 	var unique []string
-	
+
 	for _, term := range terms {
 		term = strings.TrimSpace(strings.ToLower(term))
 		if term != "" && !seen[term] {
@@ -419,7 +419,7 @@ func (s *AIService) ruleBasedOptimization(prompt string) (*OptimizeResult, error
 			unique = append(unique, term)
 		}
 	}
-	
+
 	return &OptimizeResult{
 		Optimized:   strings.Join(unique, ", "),
 		Changes:     []string{"Removed duplicates"},
@@ -438,11 +438,11 @@ func (s *AIService) ruleBasedTranslation(prompt string) (*TranslateResult, error
 func (s *AIService) ruleBasedAnalysis(prompt string) (*AnalyzeResult, error) {
 	terms := strings.Split(prompt, ",")
 	issues := []string{}
-	
+
 	if len(terms) < 5 {
 		issues = append(issues, "Too few tags")
 	}
-	
+
 	return &AnalyzeResult{
 		Analysis: map[string]string{
 			"subject":  "Rule-based analysis",
@@ -460,7 +460,7 @@ func (s *AIService) ruleBasedAnalysis(prompt string) (*AnalyzeResult, error) {
 func (s *AIService) ImportExtractedAtoms(result *ExplodeResult, categoryID uint) (*ImportResult, error) {
 	imported := 0
 	updated := 0
-	
+
 	for _, atom := range result.Atoms {
 		if atom.IsNew {
 			_, err := s.atomService.CreateAtom(
@@ -484,12 +484,12 @@ func (s *AIService) ImportExtractedAtoms(result *ExplodeResult, categoryID uint)
 					for _, s := range atom.Synonyms {
 						synonymMap[s] = true
 					}
-					
+
 					var mergedSynonyms []string
 					for s := range synonymMap {
 						mergedSynonyms = append(mergedSynonyms, s)
 					}
-					
+
 					s.atomService.UpdateAtom(atom.ExistingID, map[string]interface{}{
 						"synonyms": mergedSynonyms,
 					})
@@ -498,7 +498,7 @@ func (s *AIService) ImportExtractedAtoms(result *ExplodeResult, categoryID uint)
 			}
 		}
 	}
-	
+
 	return &ImportResult{
 		Imported: imported,
 		Updated:  updated,
