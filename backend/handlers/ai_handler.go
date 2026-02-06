@@ -23,14 +23,15 @@ type AIResponse struct {
 
 // ExplodePromptRequest represents a prompt explosion request
 type ExplodePromptRequest struct {
-	Prompt     string             `json:"prompt"`
-	Categories []string           `json:"categories,omitempty"`
-	Config     *services.AIConfig `json:"config,omitempty"`
+	Prompt      string             `json:"prompt"`
+	Categories  []string           `json:"categories,omitempty"`
+	CategoryMap map[string]uint    `json:"category_map,omitempty"` // 分类名称到ID的映射
+	Config      *services.AIConfig `json:"config,omitempty"`
 }
 
 // ExplodePrompt uses AI to break down a prompt
 func (h *AIHandler) ExplodePrompt(req ExplodePromptRequest) AIResponse {
-	result, err := h.service.ExplodePrompt(req.Prompt, req.Categories, req.Config)
+	result, err := h.service.ExplodePrompt(req.Prompt, req.Categories, req.CategoryMap, req.Config)
 	if err != nil {
 		return AIResponse{Success: false, Error: err.Error()}
 	}
@@ -135,17 +136,18 @@ func (h *AIHandler) GetAIConfig() AIResponse {
 
 // GenericAIRequest represents a generic AI request for the unified endpoint
 type GenericAIRequest struct {
-	Mode       string             `json:"mode"` // explode, optimize, translate, analyze
-	Prompt     string             `json:"prompt"`
-	Categories []string           `json:"categories,omitempty"`
-	Config     *services.AIConfig `json:"config,omitempty"`
+	Mode        string             `json:"mode"` // explode, optimize, translate, analyze
+	Prompt      string             `json:"prompt"`
+	Categories  []string           `json:"categories,omitempty"`
+	CategoryMap map[string]uint    `json:"category_map,omitempty"` // 分类名称到ID的映射
+	Config      *services.AIConfig `json:"config,omitempty"`
 }
 
 // ProcessAI handles all AI operations through a unified endpoint
 func (h *AIHandler) ProcessAI(req GenericAIRequest) AIResponse {
 	switch req.Mode {
 	case "explode":
-		result, err := h.service.ExplodePrompt(req.Prompt, req.Categories, req.Config)
+		result, err := h.service.ExplodePrompt(req.Prompt, req.Categories, req.CategoryMap, req.Config)
 		if err != nil {
 			return AIResponse{Success: false, Error: err.Error()}
 		}

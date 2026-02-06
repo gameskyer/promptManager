@@ -406,7 +406,9 @@ export const useAIStore = defineStore('ai', () => {
   }
 
   // 拆解提示词
-  async function explodePrompt(prompt, categories = []) {
+  // categories: 分类名称数组
+  // categoryMap: 分类名称到ID的映射对象 {name: id}
+  async function explodePrompt(prompt, categories = [], categoryMap = {}) {
     const config = buildAIConfig()
     
     isLoading.value = true
@@ -414,6 +416,7 @@ export const useAIStore = defineStore('ai', () => {
       const response = await ExplodePrompt({
         prompt: prompt,
         categories: categories,
+        category_map: categoryMap,
         config: config,
       })
       

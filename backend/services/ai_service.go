@@ -39,13 +39,14 @@ type ExplodeResult struct {
 
 // ExtractedAtom represents an atom extracted from text
 type ExtractedAtom struct {
-	Value      string   `json:"value"`
-	Label      string   `json:"label"`
-	Type       string   `json:"type"`
-	Category   string   `json:"category"`
-	Synonyms   []string `json:"synonyms"`
-	IsNew      bool     `json:"is_new"`
-	ExistingID uint     `json:"existing_id,omitempty"`
+	Value        string   `json:"value"`
+	Label        string   `json:"label"`
+	Type         string   `json:"type"`
+	CategoryID   uint     `json:"category"`   // 分类ID
+	CategoryName string   `json:"category_name,omitempty"` // 分类名称（用于展示）
+	Synonyms     []string `json:"synonyms"`
+	IsNew        bool     `json:"is_new"`
+	ExistingID   uint     `json:"existing_id,omitempty"`
 }
 
 // OptimizeResult represents the result of prompt optimization
@@ -86,11 +87,11 @@ func NewAIService(db *gorm.DB) *AIService {
 }
 
 // ExplodePrompt uses AI to break down a long prompt into atomic words
-func (s *AIService) ExplodePrompt(prompt string, categories []string, config *AIConfig) (*ExplodeResult, error) {
+func (s *AIService) ExplodePrompt(prompt string, categories []string, categoryMap map[string]uint, config *AIConfig) (*ExplodeResult, error) {
 	if config == nil || config.APIKey == "" {
-		return s.ruleBasedExplosion(prompt)
+		return s.ruleBasedExplosion(prompt, categoryMap)
 	}
-	return s.aiBasedExplosion(prompt, categories, config)
+	return s.aiBasedExplosion(prompt, categories, categoryMap, config)
 }
 
 // OptimizePrompt uses AI to optimize a prompt
@@ -118,7 +119,7 @@ func (s *AIService) AnalyzePrompt(prompt string, config *AIConfig) (*AnalyzeResu
 }
 
 // ruleBasedExplosion extracts atoms using rule-based parsing
-func (s *AIService) ruleBasedExplosion(prompt string) (*ExplodeResult, error) {
+func (s *AIService) ruleBasedExplosion(prompt string, categoryMap map[string]uint) (*ExplodeResult, error) {
 	delimiters := regexp.MustCompile(`[,，;；|\/]`)
 	parts := delimiters.Split(prompt, -1)
 
@@ -133,10 +134,11 @@ func (s *AIService) ruleBasedExplosion(prompt string) (*ExplodeResult, error) {
 		existingAtom, err := s.atomService.GetAtomByValue(strings.ToLower(part))
 
 		atom := ExtractedAtom{
-			Value: part,
-			Label: part,
-			Type:  "Positive",
-			IsNew: err != nil || existingAtom == nil,
+			Value:      part,
+			Label:      part,
+			Type:       "Positive",
+			IsNew:      err != nil || existingAtom == nil,
+			CategoryID: 0, // 默认无分类
 		}
 
 		if err == nil && existingAtom != nil {
@@ -144,7 +146,8 @@ func (s *AIService) ruleBasedExplosion(prompt string) (*ExplodeResult, error) {
 			atom.Label = existingAtom.Label
 			atom.Type = existingAtom.Type
 			atom.Synonyms = existingAtom.Synonyms
-			atom.Category = existingAtom.Category.Name
+			atom.CategoryID = existingAtom.CategoryID
+			atom.CategoryName = existingAtom.Category.Name
 		}
 
 		atoms = append(atoms, atom)
@@ -157,25 +160,53 @@ func (s *AIService) ruleBasedExplosion(prompt string) (*ExplodeResult, error) {
 }
 
 // aiBasedExplosion uses AI API to extract atoms
-func (s *AIService) aiBasedExplosion(prompt string, categories []string, config *AIConfig) (*ExplodeResult, error) {
-	// 构建分类列表
-	categoryList := ""
-	if len(categories) > 0 {
-		categoryList = strings.Join(categories, ", ")
+func (s *AIService) aiBasedExplosion(prompt string, categories []string, categoryMap map[string]uint, config *AIConfig) (*ExplodeResult, error) {
+	// 如果 categoryMap 为空，使用默认分类
+	if len(categoryMap) == 0 {
+		categoryMap = map[string]uint{
+			"质量":    1,
+			"人物":    2,
+			"姿势":    3,
+			"场景":    4,
+			"服装":    5,
+			"发型":    6,
+			"道具":    7,
+			"风格":    8,
+			"光照":    9,
+			"其他":    10,
+		}
 	}
+	
+	// 构建分类列表（名称:ID格式）
+	var categoryEntries []string
+	for name, id := range categoryMap {
+		categoryEntries = append(categoryEntries, fmt.Sprintf("%s(%d)", name, id))
+	}
+	categoryList := strings.Join(categoryEntries, ", ")
+	
+	// 构建分类名称列表（用于AI理解）
+	var categoryNames []string
+	for name := range categoryMap {
+		categoryNames = append(categoryNames, name)
+	}
+	categoryNameList := strings.Join(categoryNames, ", ")
 
 	systemPrompt := fmt.Sprintf(`You are a prompt engineering expert for AI image generation. Break down the following prompt into atomic components.
+
+Available categories with their IDs:
+%s
 
 Rules:
 1. Each component should be a single concept or attribute
 2. Use English for value field (lowercase, underscore for multi-word)
 3. Provide Chinese translation in label field
 4. Classify as Positive or Negative type
-5. Assign category from available categories: %s
+5. Assign category ID (number) based on the available categories above. Choose the most appropriate category ID from: %s
 6. Include relevant synonyms
+7. Return category as a NUMBER (ID), NOT as a string
 
 Return JSON format strictly:
-{"atoms": [{"value": "masterpiece", "label": "杰作", "type": "Positive", "category": "quality", "synonyms": ["best quality"]}]}`, categoryList)
+{"atoms": [{"value": "masterpiece", "label": "杰作", "type": "Positive", "category": 1, "synonyms": ["best quality"]}]}`, categoryList, categoryNameList)
 
 	response, err := s.callAIAPI(config, systemPrompt, prompt)
 	if err != nil {
@@ -198,8 +229,28 @@ Return JSON format strictly:
 		if err == nil && existing != nil {
 			result.Atoms[i].IsNew = false
 			result.Atoms[i].ExistingID = existing.ID
+			// 如果数据库中有分类，优先使用数据库的分类信息
+			if existing.CategoryID > 0 {
+				result.Atoms[i].CategoryID = existing.CategoryID
+				result.Atoms[i].CategoryName = existing.Category.Name
+			}
 		} else {
 			result.Atoms[i].IsNew = true
+		}
+		
+		// 根据CategoryID查找分类名称（对于新词或数据库中没有分类的词）
+		if result.Atoms[i].CategoryName == "" && result.Atoms[i].CategoryID > 0 {
+			for name, id := range categoryMap {
+				if id == result.Atoms[i].CategoryID {
+					result.Atoms[i].CategoryName = name
+					break
+				}
+			}
+		}
+		
+		// 如果仍然没有分类名称，标记为未分类
+		if result.Atoms[i].CategoryName == "" {
+			result.Atoms[i].CategoryName = "未分类"
 		}
 	}
 
@@ -457,17 +508,23 @@ func (s *AIService) ruleBasedAnalysis(prompt string) (*AnalyzeResult, error) {
 }
 
 // ImportExtractedAtoms imports extracted atoms into the database
-func (s *AIService) ImportExtractedAtoms(result *ExplodeResult, categoryID uint) (*ImportResult, error) {
+func (s *AIService) ImportExtractedAtoms(result *ExplodeResult, defaultCategoryID uint) (*ImportResult, error) {
 	imported := 0
 	updated := 0
 
 	for _, atom := range result.Atoms {
+		// 使用原子词自己的CategoryID，如果没有则使用默认分类ID
+		atomCategoryID := atom.CategoryID
+		if atomCategoryID == 0 {
+			atomCategoryID = defaultCategoryID
+		}
+		
 		if atom.IsNew {
 			_, err := s.atomService.CreateAtom(
 				atom.Value,
 				atom.Label,
 				atom.Type,
-				categoryID,
+				atomCategoryID,
 				atom.Synonyms,
 			)
 			if err == nil {
@@ -515,9 +572,9 @@ type ImportResult struct {
 func (s *AIService) ReverseImagePrompt(imagePath string) (*ExplodeResult, error) {
 	return &ExplodeResult{
 		Atoms: []ExtractedAtom{
-			{Value: "masterpiece", Label: "masterpiece", Type: "Positive", Category: "quality", IsNew: false},
-			{Value: "best quality", Label: "best quality", Type: "Positive", Category: "quality", IsNew: false},
-			{Value: "1girl", Label: "1girl", Type: "Positive", Category: "character", IsNew: false},
+			{Value: "masterpiece", Label: "masterpiece", Type: "Positive", CategoryID: 1, CategoryName: "quality", IsNew: false},
+			{Value: "best quality", Label: "best quality", Type: "Positive", CategoryID: 1, CategoryName: "quality", IsNew: false},
+			{Value: "1girl", Label: "1girl", Type: "Positive", CategoryID: 2, CategoryName: "character", IsNew: false},
 		},
 		RawPrompt: "masterpiece, best quality, 1girl",
 	}, nil

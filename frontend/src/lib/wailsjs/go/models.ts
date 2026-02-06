@@ -221,6 +221,7 @@ export namespace handlers {
 	export class ExplodePromptRequest {
 	    prompt: string;
 	    categories?: string[];
+	    category_map?: Record<string, number>;
 	    config?: services.AIConfig;
 	
 	    static createFrom(source: any = {}) {
@@ -231,6 +232,7 @@ export namespace handlers {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.prompt = source["prompt"];
 	        this.categories = source["categories"];
+	        this.category_map = source["category_map"];
 	        this.config = this.convertValues(source["config"], services.AIConfig);
 	    }
 	
@@ -272,6 +274,7 @@ export namespace handlers {
 	    mode: string;
 	    prompt: string;
 	    categories?: string[];
+	    category_map?: Record<string, number>;
 	    config?: services.AIConfig;
 	
 	    static createFrom(source: any = {}) {
@@ -283,6 +286,7 @@ export namespace handlers {
 	        this.mode = source["mode"];
 	        this.prompt = source["prompt"];
 	        this.categories = source["categories"];
+	        this.category_map = source["category_map"];
 	        this.config = this.convertValues(source["config"], services.AIConfig);
 	    }
 	
@@ -755,7 +759,8 @@ export namespace services {
 	    value: string;
 	    label: string;
 	    type: string;
-	    category: string;
+	    category: number;
+	    category_name?: string;
 	    synonyms: string[];
 	    is_new: boolean;
 	    existing_id?: number;
@@ -770,6 +775,7 @@ export namespace services {
 	        this.label = source["label"];
 	        this.type = source["type"];
 	        this.category = source["category"];
+	        this.category_name = source["category_name"];
 	        this.synonyms = source["synonyms"];
 	        this.is_new = source["is_new"];
 	        this.existing_id = source["existing_id"];

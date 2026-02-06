@@ -131,10 +131,11 @@
               <div class="atom-category-row">
                 <label>分类:</label>
                 <select v-model="atom.category" class="category-select">
-                  <option v-for="cat in availableCategories" :key="cat" :value="cat">
-                    {{ cat }}
+                  <option v-for="cat in availableCategories" :key="cat.id" :value="cat.id">
+                    {{ cat.name }}
                   </option>
                 </select>
+                <span class="category-name">{{ getCategoryNameById(atom.category) }}</span>
               </div>
               <div v-if="atom.synonyms?.length" class="atom-synonyms">
                 <span class="synonyms-label">近义词:</span>
@@ -234,18 +235,30 @@ const { currentProvider, currentPrompt, isConfigured } = storeToRefs(aiStore)
 
 const emit = defineEmits(['close', 'import', 'open-settings', 'apply-to-preset'])
 
-// 获取可用的分类列表
+// 获取可用的原子词子分类列表（排除根分类）
 const availableCategories = computed(() => {
-  // 从原子词分类中提取
-  const atomCategories = categoryStore.atomCategories
-    .filter(c => c.parent_id > 0) // 只取子分类
-    .map(c => c.name)
-  
-  // 去重并添加默认分类
-  const defaultCategories = ['quality', 'character', 'pose', 'scene', 'clothing', 'prop', 'style', 'lighting', 'other']
-  const allCategories = [...new Set([...atomCategories, ...defaultCategories])]
-  return allCategories
+  return categoryStore.atomCategories.filter(c => c.parent_id > 0)
 })
+
+// 获取分类名称列表（用于AI提示）
+const categoryNames = computed(() => {
+  return availableCategories.value.map(c => c.name)
+})
+
+// 构建分类名称到ID的映射
+const categoryMap = computed(() => {
+  const map = {}
+  availableCategories.value.forEach(c => {
+    map[c.name] = c.id
+  })
+  return map
+})
+
+// 根据分类ID获取分类名称
+function getCategoryNameById(categoryId) {
+  const category = availableCategories.value.find(c => c.id === categoryId)
+  return category?.name || '未分类'
+}
 
 // 本地状态
 const inputPrompt = ref('')
@@ -286,10 +299,15 @@ function getAnalysisLabel(key) {
 }
 
 // 初始化
-onMounted(() => {
+onMounted(async () => {
   aiStore.init()
   selectedProviderId.value = aiStore.currentProviderId
   selectedPromptId.value = aiStore.currentPromptId
+  
+  // 确保分类数据已加载
+  if (categoryStore.atomCategories.length === 0) {
+    await categoryStore.fetchCategories()
+  }
 })
 
 // 监听store变化
@@ -322,7 +340,11 @@ async function handleSubmit() {
   try {
     // 如果是拆解模式，传入分类数据
     if (currentPrompt.value?.id === 'explode') {
-      result.value = await aiStore.explodePrompt(inputPrompt.value, availableCategories.value)
+      result.value = await aiStore.explodePrompt(
+        inputPrompt.value, 
+        categoryNames.value,
+        categoryMap.value
+      )
     } else {
       result.value = await aiStore.callAI(inputPrompt.value)
     }
@@ -767,6 +789,15 @@ function applyToPreset() {
 .category-select:focus {
   border-color: #0ea5e9;
   outline: none;
+}
+
+.category-name {
+  color: #94a3b8;
+  font-size: 11px;
+  padding: 2px 8px;
+  background-color: rgba(148, 163, 184, 0.1);
+  border-radius: 4px;
+  white-space: nowrap;
 }
 
 .atom-synonyms {

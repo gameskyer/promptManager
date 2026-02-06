@@ -312,13 +312,13 @@ async function handleAIImport(result) {
     let atom = atomStore.atoms.find(a => a.value === atomData.value)
     
     if (!atom) {
-      // 创建新原子词
+      // 创建新原子词，使用AI返回的分类ID
       try {
         const newAtom = await atomStore.createAtom({
           value: atomData.value,
           label: atomData.label || atomData.value,
           type: atomData.type === 'Negative' ? 'Negative' : 'Positive',
-          category_id: 0, // 默认分类
+          category_id: atomData.category || 0, // 使用AI返回的分类ID
           synonyms: atomData.synonyms || []
         })
         atom = newAtom
