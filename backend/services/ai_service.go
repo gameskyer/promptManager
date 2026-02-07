@@ -25,10 +25,11 @@ type AIService struct {
 
 // AIConfig holds AI service configuration
 type AIConfig struct {
-	Provider string `json:"provider"`
-	APIKey   string `json:"api_key"`
-	Endpoint string `json:"endpoint"`
-	Model    string `json:"model"`
+	Provider     string `json:"provider"`
+	ProviderType string `json:"provider_type"` // ollama, openai-compatible, etc.
+	APIKey       string `json:"api_key"`
+	Endpoint     string `json:"endpoint"`
+	Model        string `json:"model"`
 }
 
 // ExplodeResult represents the result of AI text explosion
@@ -70,6 +71,20 @@ type AnalyzeResult struct {
 	Suggestions []string          `json:"suggestions"`
 }
 
+// shouldCallAI 检查是否应该调用AI API
+// Ollama 不需要 API Key，其他提供商需要
+func (s *AIService) shouldCallAI(config *AIConfig) bool {
+	if config == nil {
+		return false
+	}
+	// Ollama 本地服务不需要 API Key
+	if config.ProviderType == "ollama" || config.Provider == "ollama" {
+		return config.Endpoint != ""
+	}
+	// 其他提供商需要 API Key
+	return config.APIKey != ""
+}
+
 // NewAIService creates a new AIService
 func NewAIService(db *gorm.DB) *AIService {
 	// 初始化日志记录器（10MB分割）
@@ -88,7 +103,7 @@ func NewAIService(db *gorm.DB) *AIService {
 
 // ExplodePrompt uses AI to break down a long prompt into atomic words
 func (s *AIService) ExplodePrompt(prompt string, categories []string, categoryMap map[string]uint, config *AIConfig) (*ExplodeResult, error) {
-	if config == nil || config.APIKey == "" {
+	if config == nil || !s.shouldCallAI(config) {
 		return s.ruleBasedExplosion(prompt, categoryMap)
 	}
 	return s.aiBasedExplosion(prompt, categories, categoryMap, config)
@@ -96,7 +111,7 @@ func (s *AIService) ExplodePrompt(prompt string, categories []string, categoryMa
 
 // OptimizePrompt uses AI to optimize a prompt
 func (s *AIService) OptimizePrompt(prompt string, config *AIConfig) (*OptimizeResult, error) {
-	if config == nil || config.APIKey == "" {
+	if config == nil || !s.shouldCallAI(config) {
 		return s.ruleBasedOptimization(prompt)
 	}
 	return s.aiBasedOptimization(prompt, config)
@@ -104,7 +119,7 @@ func (s *AIService) OptimizePrompt(prompt string, config *AIConfig) (*OptimizeRe
 
 // TranslatePrompt uses AI to translate a prompt
 func (s *AIService) TranslatePrompt(prompt string, config *AIConfig) (*TranslateResult, error) {
-	if config == nil || config.APIKey == "" {
+	if config == nil || !s.shouldCallAI(config) {
 		return s.ruleBasedTranslation(prompt)
 	}
 	return s.aiBasedTranslation(prompt, config)
@@ -112,7 +127,7 @@ func (s *AIService) TranslatePrompt(prompt string, config *AIConfig) (*Translate
 
 // AnalyzePrompt uses AI to analyze a prompt
 func (s *AIService) AnalyzePrompt(prompt string, config *AIConfig) (*AnalyzeResult, error) {
-	if config == nil || config.APIKey == "" {
+	if config == nil || !s.shouldCallAI(config) {
 		return s.ruleBasedAnalysis(prompt)
 	}
 	return s.aiBasedAnalysis(prompt, config)

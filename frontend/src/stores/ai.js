@@ -154,6 +154,13 @@ export const useAIStore = defineStore('ai', () => {
     return !!provider.apiKey
   })
 
+  // 当前可用模型列表（用于Ollama）
+  const availableModels = computed(() => {
+    const provider = currentProvider.value
+    if (!provider) return []
+    return provider.models || []
+  })
+
   // ========== Actions ==========
   
   // 初始化 - 从localStorage加载并合并默认配置
@@ -230,6 +237,112 @@ export const useAIStore = defineStore('ai', () => {
   function setCurrentProvider(providerId) {
     currentProviderId.value = providerId
     saveToStorage()
+  }
+
+  // 获取 Ollama 本地模型列表
+  async function fetchOllamaModels(baseUrl = null) {
+    const provider = currentProvider.value
+    const url = baseUrl || provider?.baseUrl || 'http://localhost:11434'
+    
+    console.log('[Ollama] 正在获取模型列表:', url)
+    
+    try {
+      // 尝试使用 Wails 的 HTTP 调用（如果可用）
+      if (window.runtime && window.runtime.HTTPRequest) {
+        console.log('[Ollama] 使用 Wails HTTP 调用')
+        const response = await window.runtime.HTTPRequest('GET', `${url}/api/tags`)
+        const data = JSON.parse(response)
+        const models = data.models?.map(m => m.name) || []
+        console.log('[Ollama] 获取成功:', models)
+        return models
+      }
+      
+      // 降级到普通 fetch（Wails 桌面应用通常没有 CORS 限制）
+      console.log('[Ollama] 使用 fetch 调用')
+      const response = await fetch(`${url}/api/tags`, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+        },
+      })
+      
+      console.log('[Ollama] 响应状态:', response.status, response.statusText)
+      
+      if (!response.ok) {
+        throw new Error(`获取模型列表失败: ${response.status} ${response.statusText}`)
+      }
+      
+      // 先获取原始文本，方便调试
+      const rawText = await response.text()
+      console.log('[Ollama] 原始响应:', rawText)
+      
+      // 解析 JSON
+      let data
+      try {
+        data = JSON.parse(rawText)
+      } catch (e) {
+        console.error('[Ollama] JSON 解析失败:', e)
+        throw new Error(`响应解析失败: ${rawText.slice(0, 200)}`)
+      }
+      
+      console.log('[Ollama] 响应数据:', data)
+      console.log('[Ollama] models 字段:', data.models)
+      console.log('[Ollama] models 类型:', typeof data.models, Array.isArray(data.models))
+      
+      // Ollama返回的格式: { models: [{ name: 'model-name', ... }, ...] }
+      const models = data.models?.map(m => m.name) || []
+      console.log('[Ollama] 提取的模型列表:', models)
+      return models
+    } catch (error) {
+      console.error('[Ollama] 获取模型列表失败:', error)
+      console.error('[Ollama] 错误详情:', {
+        message: error.message,
+        name: error.name,
+        stack: error.stack,
+      })
+      
+      // 提供更友好的错误信息
+      if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+        throw new Error('无法连接到 Ollama 服务，请检查：\n1. Ollama 是否已启动 (ollama serve)\n2. 地址是否正确\n3. 如果是浏览器访问，请设置 OLLAMA_ORIGINS=*')
+      }
+      
+      throw error
+    }
+  }
+
+  // 刷新当前 Ollama 提供商的模型列表
+  async function refreshOllamaModels() {
+    const provider = currentProvider.value
+    if (!provider || provider.type !== 'ollama') {
+      throw new Error('当前提供商不是Ollama')
+    }
+    
+    const models = await fetchOllamaModels(provider.baseUrl)
+    
+    // 更新提供商的模型列表
+    const index = providers.value.findIndex(p => p.id === provider.id)
+    if (index !== -1) {
+      providers.value[index].models = models
+      // 如果当前选中的模型不在列表中，选择第一个
+      if (models.length > 0 && !models.includes(providers.value[index].model)) {
+        providers.value[index].model = models[0]
+      }
+      saveToStorage()
+    }
+    
+    return models
+  }
+
+  // 设置当前模型
+  function setCurrentModel(modelName) {
+    const provider = currentProvider.value
+    if (!provider) return
+    
+    const index = providers.value.findIndex(p => p.id === provider.id)
+    if (index !== -1) {
+      providers.value[index].model = modelName
+      saveToStorage()
+    }
   }
   
   // 设置当前Prompt
@@ -325,6 +438,7 @@ export const useAIStore = defineStore('ai', () => {
 
     return {
       provider: provider.id,
+      provider_type: provider.type || 'openai-compatible',
       api_key: provider.apiKey,
       endpoint: provider.baseUrl,
       model: provider.model,
@@ -529,11 +643,13 @@ export const useAIStore = defineStore('ai', () => {
     enabledProviders,
     availablePrompts,
     isConfigured,
+    availableModels,
     
     // Actions
     init,
     setCurrentProvider,
     setCurrentPrompt,
+    setCurrentModel,
     addProvider,
     updateProvider,
     removeProvider,
@@ -548,5 +664,7 @@ export const useAIStore = defineStore('ai', () => {
     translatePrompt,
     analyzePrompt,
     clearHistory,
+    fetchOllamaModels,
+    refreshOllamaModels,
   }
 })

@@ -170,11 +170,38 @@
                 
                 <div class="form-group">
                   <label>默认模型</label>
-                  <input v-model="editingProvider.model" placeholder="模型名称" />
+                  <div class="model-input-wrapper">
+                    <select v-model="editingProvider.model" class="model-select">
+                      <option v-if="editingProvider.isLoadingModels" value="">加载中...</option>
+                      <option v-else-if="!editingProvider.models?.length" value="">请先获取模型列表</option>
+                      <option 
+                        v-for="model in editingProvider.models" 
+                        :key="model" 
+                        :value="model"
+                      >
+                        {{ model }}
+                      </option>
+                    </select>
+                    <button 
+                      v-if="editingProvider.type === 'ollama'"
+                      type="button"
+                      class="refresh-models-btn"
+                      @click="fetchOllamaModelsForEdit"
+                      :disabled="editingProvider.isLoadingModels"
+                      title="从Ollama获取模型列表"
+                    >
+                      <ArrowPathIcon v-if="!editingProvider.isLoadingModels" class="w-4 h-4" />
+                      <div v-else class="spinner-small"></div>
+                      获取模型
+                    </button>
+                  </div>
+                  <div v-if="editingProvider.modelError" class="model-error">
+                    {{ editingProvider.modelError }}
+                  </div>
                 </div>
                 
                 <div class="form-group">
-                  <label>可用模型（逗号分隔）</label>
+                  <label>可用模型（逗号分隔，或点击上方获取按钮自动填充）</label>
                   <input v-model="editingProvider.modelsText" placeholder="model1, model2, model3" />
                 </div>
                 
@@ -333,6 +360,7 @@ import {
   ArrowPathIcon,
   DocumentIcon,
 } from '@heroicons/vue/24/outline'
+
 import { useAppStore, useAIStore } from '../stores'
 
 const appStore = useAppStore()
@@ -369,6 +397,30 @@ function editProvider(provider) {
   editingProvider.value = {
     ...provider,
     modelsText: provider.models?.join(', ') || provider.model,
+    isLoadingModels: false,
+    modelError: null,
+  }
+}
+
+// 为编辑中的Ollama提供商获取模型列表
+async function fetchOllamaModelsForEdit() {
+  if (!editingProvider.value) return
+  
+  editingProvider.value.isLoadingModels = true
+  editingProvider.value.modelError = null
+  
+  try {
+    const models = await aiStore.fetchOllamaModels(editingProvider.value.baseUrl)
+    editingProvider.value.models = models
+    editingProvider.value.modelsText = models.join(', ')
+    // 如果当前没有选中模型，选择第一个
+    if (models.length > 0 && !editingProvider.value.model) {
+      editingProvider.value.model = models[0]
+    }
+  } catch (err) {
+    editingProvider.value.modelError = err.message || '获取模型列表失败，请检查Ollama是否运行'
+  } finally {
+    editingProvider.value.isLoadingModels = false
   }
 }
 

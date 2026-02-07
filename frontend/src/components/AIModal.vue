@@ -52,6 +52,43 @@
           </div>
         </div>
         
+        <!-- 模型选择（仅Ollama显示） -->
+        <div v-if="isOllamaProvider" class="model-selector">
+          <div class="selector">
+            <label>选择模型</label>
+            <div class="model-select-wrapper">
+              <select 
+                v-model="selectedModel" 
+                @change="onModelChange"
+                :disabled="aiStore.availableModels.length === 0 || isLoadingModels"
+              >
+                <option v-if="isLoadingModels" value="">加载中...</option>
+                <option v-else-if="aiStore.availableModels.length === 0" value="">暂无可用模型</option>
+                <option 
+                  v-for="model in aiStore.availableModels" 
+                  :key="model" 
+                  :value="model"
+                >
+                  {{ model }}
+                </option>
+              </select>
+              <button 
+                class="refresh-btn" 
+                @click="refreshModels"
+                :disabled="isLoadingModels"
+                title="刷新模型列表"
+              >
+                <ArrowPathIcon v-if="!isLoadingModels" class="w-4 h-4" />
+                <div v-else class="spinner-small"></div>
+              </button>
+            </div>
+          </div>
+          <div v-if="modelError" class="model-error">
+            <ExclamationTriangleIcon class="w-4 h-4 flex-shrink-0" />
+            <pre class="error-text">{{ modelError }}</pre>
+          </div>
+        </div>
+        
         <!-- 当前 Prompt 描述 -->
         <div v-if="currentPrompt" class="prompt-desc">
           <SparklesIcon class="w-4 h-4" />
@@ -226,6 +263,7 @@ import {
   ExclamationTriangleIcon,
   ClipboardDocumentIcon,
   CheckIcon,
+  ArrowPathIcon,
 } from '@heroicons/vue/24/outline'
 import { useAIStore, useCategoryStore } from '../stores'
 
@@ -266,6 +304,14 @@ const error = ref(null)
 const result = ref(null)
 const selectedProviderId = ref('')
 const selectedPromptId = ref('')
+const selectedModel = ref('')
+const isLoadingModels = ref(false)
+const modelError = ref(null)
+
+// 计算属性：当前是否是Ollama提供商
+const isOllamaProvider = computed(() => {
+  return currentProvider.value?.type === 'ollama'
+})
 
 // 输入占位符
 const inputPlaceholder = computed(() => {
@@ -303,10 +349,16 @@ onMounted(async () => {
   aiStore.init()
   selectedProviderId.value = aiStore.currentProviderId
   selectedPromptId.value = aiStore.currentPromptId
+  selectedModel.value = currentProvider.value?.model || ''
   
   // 确保分类数据已加载
   if (categoryStore.atomCategories.length === 0) {
     await categoryStore.fetchCategories()
+  }
+  
+  // 如果是Ollama提供商，自动获取模型列表
+  if (isOllamaProvider.value) {
+    await loadOllamaModels()
   }
 })
 
@@ -320,8 +372,40 @@ watch(() => aiStore.currentPromptId, (val) => {
 })
 
 // 切换提供商
-function onProviderChange() {
+async function onProviderChange() {
   aiStore.setCurrentProvider(selectedProviderId.value)
+  selectedModel.value = currentProvider.value?.model || ''
+  modelError.value = null
+  
+  // 如果切换到Ollama，自动获取模型列表
+  if (isOllamaProvider.value) {
+    await loadOllamaModels()
+  }
+}
+
+// 切换模型
+function onModelChange() {
+  aiStore.setCurrentModel(selectedModel.value)
+}
+
+// 加载Ollama模型列表
+async function loadOllamaModels() {
+  isLoadingModels.value = true
+  modelError.value = null
+  try {
+    await aiStore.refreshOllamaModels()
+    selectedModel.value = currentProvider.value?.model || ''
+  } catch (err) {
+    modelError.value = err.message || '获取模型列表失败'
+    console.error('获取Ollama模型列表失败:', err)
+  } finally {
+    isLoadingModels.value = false
+  }
+}
+
+// 刷新模型列表
+async function refreshModels() {
+  await loadOllamaModels()
 }
 
 // 切换Prompt
@@ -511,6 +595,75 @@ function applyToPreset() {
 
 .selector select option:disabled {
   color: #64748b;
+}
+
+/* Model Selector */
+.model-selector {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.model-select-wrapper {
+  display: flex;
+  gap: 8px;
+}
+
+.model-select-wrapper select {
+  flex: 1;
+}
+
+.refresh-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  background-color: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  color: #94a3b8;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.refresh-btn:hover:not(:disabled) {
+  background-color: #334155;
+  color: #e2e8f0;
+}
+
+.refresh-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.spinner-small {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+.model-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 12px;
+  color: #ef4444;
+  padding: 8px 12px;
+  background-color: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 6px;
+  margin-top: 8px;
+}
+
+.model-error .error-text {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.5;
 }
 
 .prompt-desc {
