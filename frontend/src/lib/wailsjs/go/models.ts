@@ -739,6 +739,7 @@ export namespace services {
 	
 	export class AIConfig {
 	    provider: string;
+	    provider_type: string;
 	    api_key: string;
 	    endpoint: string;
 	    model: string;
@@ -750,6 +751,7 @@ export namespace services {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.provider = source["provider"];
+	        this.provider_type = source["provider_type"];
 	        this.api_key = source["api_key"];
 	        this.endpoint = source["endpoint"];
 	        this.model = source["model"];

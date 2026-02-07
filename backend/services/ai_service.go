@@ -343,6 +343,91 @@ func (s *AIService) aiBasedAnalysis(prompt string, config *AIConfig) (*AnalyzeRe
 
 // callAIAPI makes the actual API call to AI service
 func (s *AIService) callAIAPI(config *AIConfig, systemPrompt, userPrompt string) (string, error) {
+	// Ollama 使用不同的 API 格式
+	if config.ProviderType == "ollama" || config.Provider == "ollama" {
+		return s.callOllamaAPI(config, systemPrompt, userPrompt)
+	}
+	return s.callOpenAICompatibleAPI(config, systemPrompt, userPrompt)
+}
+
+// callOllamaAPI calls Ollama API
+func (s *AIService) callOllamaAPI(config *AIConfig, systemPrompt, userPrompt string) (string, error) {
+	startTime := time.Now()
+
+	endpoint := config.Endpoint
+	if endpoint == "" {
+		endpoint = "http://localhost:11434"
+	}
+
+	model := config.Model
+	if model == "" {
+		model = "llama2"
+	}
+
+	// Ollama 的 /api/generate 格式
+	requestBody := map[string]interface{}{
+		"model":  model,
+		"prompt": systemPrompt + "\n\n" + userPrompt,
+		"stream": false,
+		"options": map[string]interface{}{
+			"temperature": 0.3,
+		},
+	}
+
+	jsonBody, err := json.Marshal(requestBody)
+	if err != nil {
+		return "", err
+	}
+
+	// 记录请求日志
+	if s.logger != nil {
+		s.logger.LogAIRequest(config.Provider, endpoint+"/api/generate", model, requestBody)
+	}
+
+	req, err := http.NewRequest("POST", endpoint+"/api/generate", bytes.NewBuffer(jsonBody))
+	if err != nil {
+		return "", err
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	// 读取响应体
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+	bodyString := string(bodyBytes)
+
+	// 记录响应日志
+	duration := time.Since(startTime)
+	if s.logger != nil {
+		s.logger.LogAIResponse(resp.StatusCode, bodyString, duration)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("Ollama API error (%d): %s", resp.StatusCode, bodyString)
+	}
+
+	// 解析 Ollama 响应
+	var ollamaResponse struct {
+		Response string `json:"response"`
+	}
+
+	if err := json.Unmarshal(bodyBytes, &ollamaResponse); err != nil {
+		return "", err
+	}
+
+	return ollamaResponse.Response, nil
+}
+
+// callOpenAICompatibleAPI calls OpenAI compatible API
+func (s *AIService) callOpenAICompatibleAPI(config *AIConfig, systemPrompt, userPrompt string) (string, error) {
 	startTime := time.Now()
 
 	endpoint := config.Endpoint
