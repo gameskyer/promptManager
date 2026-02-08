@@ -251,31 +251,36 @@ function closePresetDialog() {
 }
 
 async function savePreset(data) {
-  if (data.id) {
-    await presetStore.updatePreset(data.id, data.title, data.category_id)
-    // 更新其他字段
-    const preset = presets.value.find(p => p.id === data.id)
-    if (preset) {
-      preset.category_id = data.category_id
-      preset.pos_text = data.pos_text
-      preset.neg_text = data.neg_text
-      preset.params = data.params
-      preset.loras = data.loras
+  try {
+    if (data.id) {
+      await presetStore.updatePreset(data.id, data.title, data.category_id)
+      // 更新其他字段
+      const preset = presets.value.find(p => p.id === data.id)
+      if (preset) {
+        preset.category_id = data.category_id
+        preset.pos_text = data.pos_text
+        preset.neg_text = data.neg_text
+        preset.params = data.params
+        preset.loras = data.loras
+      }
+    } else {
+      await presetStore.createPreset(
+        data.title,
+        data.category_id,
+        data.pos_text,
+        data.neg_text,
+        [],
+        data.params,
+        data.loras,
+        data.previews || []
+      )
     }
-  } else {
-    await presetStore.createPreset(
-      data.title,
-      data.category_id,
-      data.pos_text,
-      data.neg_text,
-      [],
-      data.params,
-      data.loras,
-      data.previews || []
-    )
+    closePresetDialog()
+    await presetStore.fetchPresets(1, 20, currentCategoryId.value > 0 ? currentCategoryId.value : 0)
+  } catch (error) {
+    console.error('Failed to save preset:', error)
+    alert('保存预设失败: ' + error.message)
   }
-  closePresetDialog()
-  await presetStore.fetchPresets(1, 20, currentCategoryId.value > 0 ? currentCategoryId.value : 0)
 }
 
 async function deletePreset(id) {

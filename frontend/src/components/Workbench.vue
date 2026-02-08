@@ -371,6 +371,7 @@ async function savePreset() {
   try {
     await presetStore.createPreset(
       presetForm.value.title,
+      0, // categoryId - 默认分类
       positivePromptText.value,
       negativePromptText.value,
       [], // atoms

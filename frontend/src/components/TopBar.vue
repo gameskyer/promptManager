@@ -278,6 +278,7 @@ async function savePreset(data) {
   } else {
     await presetStore.createPreset(
       data.title,
+      data.category_id || 0,
       data.pos_text,
       data.neg_text,
       [],
