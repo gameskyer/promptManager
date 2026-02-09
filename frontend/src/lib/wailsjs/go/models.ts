@@ -700,6 +700,22 @@ export namespace handlers {
 	        this.category_id = source["category_id"];
 	    }
 	}
+	export class UpdateVersionPreviewRequest {
+	    preset_id: number;
+	    thumbnail_path: string;
+	    preview_paths: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new UpdateVersionPreviewRequest(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.preset_id = source["preset_id"];
+	        this.thumbnail_path = source["thumbnail_path"];
+	        this.preview_paths = source["preview_paths"];
+	    }
+	}
 	export class UploadImageRequest {
 	    data: string;
 	    preset_id: number;

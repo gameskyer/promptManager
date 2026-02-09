@@ -41,3 +41,7 @@ export function RollbackToVersion(arg1, arg2) {
 export function StarVersion(arg1) {
   return window['go']['handlers']['VersionHandler']['StarVersion'](arg1);
 }
+
+export function UpdateVersionPreview(arg1) {
+  return window['go']['handlers']['VersionHandler']['UpdateVersionPreview'](arg1);
+}

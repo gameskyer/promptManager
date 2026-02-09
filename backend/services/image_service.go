@@ -65,6 +65,9 @@ func (s *ImageService) UploadImage(req UploadImageRequest) (*UploadResult, error
 	// Generate unique filename
 	filename := uuid.New().String() + ext
 	filePath := filepath.Join(config.ImageDir, filename)
+	
+	// 存储到数据库的路径（使用 /images/ 前缀，便于前端访问）
+	webPath := "/images/" + filename
 
 	// Save file
 	if err := os.WriteFile(filePath, data, 0644); err != nil {
@@ -75,7 +78,7 @@ func (s *ImageService) UploadImage(req UploadImageRequest) (*UploadResult, error
 	preview := &models.Preview{
 		PresetID:  req.PresetID,
 		VersionID: func() *uint { if req.VersionID > 0 { return &req.VersionID }; return nil }(),
-		FilePath:  filePath,
+		FilePath:  webPath, // 使用 web 路径
 		CreatedAt: time.Now(),
 	}
 
@@ -87,8 +90,8 @@ func (s *ImageService) UploadImage(req UploadImageRequest) (*UploadResult, error
 
 	return &UploadResult{
 		ID:       preview.ID,
-		FilePath: filePath,
-		URL:      "file://" + filePath,
+		FilePath: webPath,
+		URL:      webPath,
 	}, nil
 }
 
@@ -121,6 +124,9 @@ func (s *ImageService) UploadImageFromPath(sourcePath string, presetID uint, ver
 	// Generate unique filename
 	filename := uuid.New().String() + ext
 	filePath := filepath.Join(config.ImageDir, filename)
+	
+	// 存储到数据库的路径（使用 /images/ 前缀，便于前端访问）
+	webPath := "/images/" + filename
 
 	// Create destination file
 	dstFile, err := os.Create(filePath)
@@ -139,7 +145,7 @@ func (s *ImageService) UploadImageFromPath(sourcePath string, presetID uint, ver
 	preview := &models.Preview{
 		PresetID:  presetID,
 		VersionID: func() *uint { if versionID > 0 { return &versionID }; return nil }(),
-		FilePath:  filePath,
+		FilePath:  webPath, // 使用 web 路径
 		CreatedAt: time.Now(),
 	}
 
@@ -150,8 +156,8 @@ func (s *ImageService) UploadImageFromPath(sourcePath string, presetID uint, ver
 
 	return &UploadResult{
 		ID:       preview.ID,
-		FilePath: filePath,
-		URL:      "file://" + filePath,
+		FilePath: webPath,
+		URL:      webPath,
 	}, nil
 }
 

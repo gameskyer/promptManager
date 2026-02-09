@@ -2,6 +2,9 @@ package services
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
+	"promptmaster/backend/config"
 	"promptmaster/backend/models"
 	"strings"
 	"time"
@@ -30,26 +33,32 @@ func (s *PresetService) CreatePreset(title string, categoryID uint, posText, neg
 		CategoryID: categoryID,
 	}
 	
+	// Upload preview images outside of transaction (file I/O should not be in DB transaction)
 	var previewPaths []string
+	if len(previewBase64s) > 0 {
+		for _, base64Data := range previewBase64s {
+			result, err := s.imageService.UploadImage(UploadImageRequest{
+				Data: base64Data,
+				// PresetID will be set after preset is created
+			})
+			if err != nil {
+				// Log error but continue
+				fmt.Printf("Failed to upload image: %v\n", err)
+				continue
+			}
+			previewPaths = append(previewPaths, result.FilePath)
+		}
+	}
 	
 	err := s.db.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Create(preset).Error; err != nil {
 			return err
 		}
 		
-		// Upload preview images
-		if len(previewBase64s) > 0 {
-			for _, base64Data := range previewBase64s {
-				result, err := s.imageService.UploadImage(UploadImageRequest{
-					Data:     base64Data,
-					PresetID: preset.ID,
-				})
-				if err != nil {
-					// Log error but continue
-					fmt.Printf("Failed to upload image: %v\n", err)
-					continue
-				}
-				previewPaths = append(previewPaths, result.FilePath)
+		// Update uploaded images with preset ID
+		if len(previewPaths) > 0 {
+			if err := tx.Model(&models.Preview{}).Where("file_path IN ?", previewPaths).Update("preset_id", preset.ID).Error; err != nil {
+				return err
 			}
 		}
 		
@@ -79,6 +88,13 @@ func (s *PresetService) CreatePreset(title string, categoryID uint, posText, neg
 	})
 	
 	if err != nil {
+		// Cleanup uploaded images if transaction failed
+		for _, path := range previewPaths {
+			// 将 web 路径转换为文件系统路径
+			filePath := strings.TrimPrefix(path, "/images/")
+			filePath = filepath.Join(config.ImageDir, filePath)
+			os.Remove(filePath)
+		}
 		return nil, err
 	}
 	
@@ -112,7 +128,7 @@ func (s *PresetService) GetPresets(page, pageSize int, categoryID uint, includeD
 	query.Count(&total)
 	
 	offset := (page - 1) * pageSize
-	if err := query.Order("updated_at DESC").Offset(offset).Limit(pageSize).Find(&presets).Error; err != nil {
+	if err := query.Preload("Versions").Order("updated_at DESC").Offset(offset).Limit(pageSize).Find(&presets).Error; err != nil {
 		return nil, 0, err
 	}
 	
@@ -316,6 +332,9 @@ func (s *PresetService) ToPresetWithSnapshot(preset *models.Preset) (*PresetWith
 		currentVersion = &preset.Versions[len(preset.Versions)-1]
 	}
 	
+	fmt.Printf("[DEBUG] ToPresetWithSnapshot: presetID=%d, currentVersion=%d, foundVersion=%v\n", 
+		preset.ID, preset.CurrentVersion, currentVersion != nil)
+	
 	if currentVersion != nil {
 		snapshot, err := currentVersion.ToSnapshotData()
 		if err == nil {
@@ -324,7 +343,10 @@ func (s *PresetService) ToPresetWithSnapshot(preset *models.Preset) (*PresetWith
 			result.Params = snapshot.Params
 			result.AtomIDs = snapshot.AtomIDs
 			result.Previews = snapshot.PreviewPaths
-			if len(snapshot.PreviewPaths) > 0 {
+			// 优先使用 ThumbnailPath（如果存在），否则使用 PreviewPaths[0]
+			if currentVersion.ThumbnailPath != "" {
+				result.Thumbnail = currentVersion.ThumbnailPath
+			} else if len(snapshot.PreviewPaths) > 0 {
 				result.Thumbnail = snapshot.PreviewPaths[0]
 			}
 			// Extract LoRAs from params
@@ -335,7 +357,14 @@ func (s *PresetService) ToPresetWithSnapshot(preset *models.Preset) (*PresetWith
 					}
 				}
 			}
+			
+			fmt.Printf("[DEBUG] ToPresetWithSnapshot: PreviewPaths=%v, ThumbnailPath=%s, result.Thumbnail=%s\n",
+				snapshot.PreviewPaths, currentVersion.ThumbnailPath, result.Thumbnail)
+		} else {
+			fmt.Printf("[DEBUG] ToPresetWithSnapshot: ToSnapshotData error=%v\n", err)
 		}
+	} else {
+		fmt.Printf("[DEBUG] ToPresetWithSnapshot: no current version found, Versions count=%d\n", len(preset.Versions))
 	}
 	
 	return result, nil

@@ -51,6 +51,17 @@ export const usePresetStore = defineStore('preset', () => {
         presets.value = response.data.presets || []
         totalCount.value = response.data.total || 0
         currentPage.value = response.data.page || page
+        
+        // Debug: 打印第一个预设的封面信息
+        if (presets.value.length > 0) {
+          const first = presets.value[0]
+          console.log('[presetStore] fetchPresets first preset:', {
+            id: first.id,
+            title: first.title,
+            thumbnail: first.thumbnail,
+            previews: first.previews,
+          })
+        }
       } else {
         error.value = response.error || '获取预设失败'
       }

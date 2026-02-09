@@ -138,7 +138,7 @@ import {
   FolderIcon,
   QuestionMarkCircleIcon,
 } from '@heroicons/vue/24/outline'
-import { useAppStore, usePresetStore, useCategoryStore, useVersionStore } from '../stores'
+import { useAppStore, usePresetStore, useCategoryStore, useVersionStore, useImageStore } from '../stores'
 import PresetCard from './PresetCard.vue'
 import PresetDialog from './PresetDialog.vue'
 import PresetDetailModal from './PresetDetailModal.vue'
@@ -148,6 +148,7 @@ const appStore = useAppStore()
 const presetStore = usePresetStore()
 const categoryStore = useCategoryStore()
 const versionStore = useVersionStore()
+const imageStore = useImageStore()
 
 const { activePresets: presets } = storeToRefs(presetStore)
 const { categories } = storeToRefs(categoryStore)
@@ -251,19 +252,122 @@ function closePresetDialog() {
 }
 
 async function savePreset(data) {
+  console.log('[PresetList] savePreset received:', {
+    id: data.id,
+    thumbnail: data.thumbnail,
+    previews: data.previews,
+    previewsLength: data.previews?.length,
+  })
+  
   try {
     if (data.id) {
-      await presetStore.updatePreset(data.id, data.title, data.category_id)
-      // 更新其他字段
-      const preset = presets.value.find(p => p.id === data.id)
-      if (preset) {
-        preset.category_id = data.category_id
-        preset.pos_text = data.pos_text
-        preset.neg_text = data.neg_text
-        preset.params = data.params
-        preset.loras = data.loras
+      // 获取原始 preset 数据进行对比
+      const originalPreset = editingPreset.value
+      
+      // 判断核心数据是否有变化（排除预览图相关字段）
+      const hasCoreDataChanged = 
+        data.title !== originalPreset.title ||
+        data.category_id !== originalPreset.category_id ||
+        data.pos_text !== originalPreset.pos_text ||
+        data.neg_text !== originalPreset.neg_text ||
+        JSON.stringify(data.params) !== JSON.stringify(originalPreset.params) ||
+        JSON.stringify(data.loras) !== JSON.stringify(originalPreset.loras)
+      
+      // 判断预览图是否有变化
+      const hasPreviewChanged = 
+        data.thumbnail !== originalPreset.thumbnail ||
+        JSON.stringify(data.previews) !== JSON.stringify(originalPreset.previews)
+      
+      console.log('[PresetList] change detection:', {
+        hasCoreDataChanged,
+        hasPreviewChanged,
+      })
+      
+      // 更新预设基本信息
+      if (data.title !== originalPreset.title || data.category_id !== originalPreset.category_id) {
+        await presetStore.updatePreset(data.id, data.title, data.category_id)
+      }
+      
+      // 处理预览图上传（无论是否只改预览图，都需要上传新图片）
+      // 分离新图片(base64)和已有图片路径
+      const newImages = []  // data:image/xxx;base64,xxxxx
+      const existingPaths = []  // /images/xxx.png
+      for (const p of data.previews || []) {
+        if (p && p.startsWith('data:')) {
+          // 新上传的 base64 图片（完整 data URL）
+          newImages.push(p)
+        } else if (p && p.startsWith('/images/')) {
+          // 已有的图片路径
+          existingPaths.push(p)
+        } else if (p) {
+          // 其他未知格式，记录日志
+          console.warn('[PresetList] Unknown preview format:', p?.substring(0, 50))
+        }
+      }
+      
+      console.log('[PresetList] image classification:', {
+        newImagesCount: newImages.length,
+        existingPathsCount: existingPaths.length,
+        existingPaths: existingPaths,
+      })
+      
+      // 上传新图片到后端
+      let uploadedPaths = []
+      for (const base64Data of newImages) {
+        const resp = await imageStore.uploadImageBase64(base64Data, data.id)
+        console.log('[PresetList] uploadImageBase64 response:', resp)
+        if (resp.success && resp.data?.file_path) {
+          uploadedPaths.push(resp.data.file_path)
+        }
+      }
+      
+      // 合并所有图片路径（已有 + 新上传）
+      const allPreviewPaths = [...existingPaths, ...uploadedPaths]
+      
+      // 确定封面路径
+      let thumbnailPath = data.thumbnail || ''
+      if (thumbnailPath.startsWith('data:') || thumbnailPath.length > 100) {
+        // 如果封面是新上传的图片，使用第一张新上传的图片作为封面
+        thumbnailPath = uploadedPaths[0] || allPreviewPaths[0] || ''
+      }
+      
+      if (hasCoreDataChanged) {
+        // 核心数据有变化，创建新版本
+        console.log('[PresetList] creating version with:', {
+          thumbnailPath,
+          allPreviewPaths,
+          uploadedPaths,
+        })
+        
+        await versionStore.createVersion(
+          data.id,
+          {
+            pos_text: data.pos_text,
+            neg_text: data.neg_text,
+            atom_ids: [],
+            params: {
+              ...data.params,
+              loras: data.loras || [],
+            },
+          },
+          thumbnailPath,
+          allPreviewPaths
+        )
+      } else if (hasPreviewChanged) {
+        // 只有预览图变化，更新当前版本的预览图（不创建新版本）
+        console.log('[PresetList] updating preview only:', {
+          thumbnailPath,
+          allPreviewPaths,
+        })
+        
+        await versionStore.updateVersionPreview(
+          data.id,
+          thumbnailPath,
+          allPreviewPaths
+        )
       }
     } else {
+      // 新建预设
       await presetStore.createPreset(
         data.title,
         data.category_id,
@@ -309,12 +413,60 @@ async function viewPresetHistory(preset) {
 
 async function updateThumbnail(presetId, thumbnailUrl, newPreviews = null) {
   const preset = presets.value.find(p => p.id === presetId)
-  if (preset) {
-    preset.thumbnail = thumbnailUrl
-    if (newPreviews) {
-      preset.previews = newPreviews
+  if (!preset) return
+  
+  console.log('[PresetList] updateThumbnail:', {
+    presetId,
+    thumbnailUrl: thumbnailUrl?.substring(0, 50),
+    newPreviews: newPreviews?.map(p => p?.substring(0, 50)),
+  })
+  
+  try {
+    // 处理新上传的图片（data URL 格式）
+    const newImages = []
+    const existingPaths = []
+    
+    for (const p of newPreviews || []) {
+      if (p && p.startsWith('data:')) {
+        newImages.push(p)
+      } else if (p && p.startsWith('/images/')) {
+        existingPaths.push(p)
+      }
     }
-    await presetStore.updateThumbnailOnly(presetId, thumbnailUrl, newPreviews)
+    
+    // 上传新图片
+    let uploadedPaths = []
+    for (const base64Data of newImages) {
+      const resp = await imageStore.uploadImageBase64(base64Data, presetId)
+      if (resp.success && resp.data?.file_path) {
+        uploadedPaths.push(resp.data.file_path)
+      }
+    }
+    
+    // 合并所有图片路径
+    const allPreviewPaths = [...existingPaths, ...uploadedPaths]
+    
+    // 确定封面路径
+    let thumbnailPath = thumbnailUrl
+    if (thumbnailPath.startsWith('data:')) {
+      // 如果封面是新上传的图片，使用第一张新上传的图片
+      thumbnailPath = uploadedPaths[0] || allPreviewPaths[0] || ''
+    }
+    
+    // 更新本地状态
+    preset.thumbnail = thumbnailPath
+    preset.previews = allPreviewPaths
+    
+    // 保存到后端（只更新预览图，不创建新版本）
+    await versionStore.updateVersionPreview(presetId, thumbnailPath, allPreviewPaths)
+    
+    console.log('[PresetList] updateThumbnail saved:', {
+      thumbnailPath,
+      allPreviewPaths,
+    })
+  } catch (error) {
+    console.error('[PresetList] updateThumbnail failed:', error)
+    alert('保存预览图失败: ' + error.message)
   }
 }
 

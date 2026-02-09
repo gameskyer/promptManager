@@ -145,3 +145,21 @@ func (h *VersionHandler) GetVersionDiffStats(presetID uint, versionNum int) Vers
 		"diff_stats": version.DiffStats,
 	}}
 }
+
+// UpdateVersionPreviewRequest represents a request to update version preview
+// This updates the current version without creating a new one
+type UpdateVersionPreviewRequest struct {
+	PresetID      uint     `json:"preset_id"`
+	ThumbnailPath string   `json:"thumbnail_path"`
+	PreviewPaths  []string `json:"preview_paths"`
+}
+
+// UpdateVersionPreview updates only the preview images of the current version
+// Preview changes do not create new versions
+func (h *VersionHandler) UpdateVersionPreview(req UpdateVersionPreviewRequest) VersionResponse {
+	version, err := h.service.UpdateVersionPreview(req.PresetID, req.ThumbnailPath, req.PreviewPaths)
+	if err != nil {
+		return VersionResponse{Success: false, Error: err.Error()}
+	}
+	return VersionResponse{Success: true, Data: version}
+}

@@ -21,3 +21,5 @@ export function GetVersionHistory(arg1:number,arg2:number):Promise<handlers.Vers
 export function RollbackToVersion(arg1:number,arg2:number):Promise<handlers.VersionResponse>;
 
 export function StarVersion(arg1:handlers.StarVersionRequest):Promise<handlers.VersionResponse>;
+
+export function UpdateVersionPreview(arg1:handlers.UpdateVersionPreviewRequest):Promise<handlers.VersionResponse>;

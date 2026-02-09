@@ -124,7 +124,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import {
   PhotoIcon,
   PlusIcon,
@@ -146,6 +146,17 @@ const props = defineProps({
     required: true,
   },
 })
+
+// Debug: 监听 preset 变化
+watch(() => props.preset, (newVal) => {
+  console.log('[PresetCard] preset changed:', {
+    id: newVal.id,
+    title: newVal.title,
+    thumbnail: newVal.thumbnail,
+    previews: newVal.previews,
+    previewsLength: newVal.previews?.length,
+  })
+}, { immediate: true })
 
 const emit = defineEmits(['view', 'edit', 'use', 'delete', 'update-thumbnail'])
 

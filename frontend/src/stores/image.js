@@ -38,6 +38,33 @@ export const useImageStore = defineStore('image', () => {
     }
   }
 
+  async function uploadImageBase64(dataURL, presetID = 0, versionID = 0) {
+    loading.value = true
+    error.value = null
+
+    try {
+      // 提取 base64 数据（去掉 data:image/xxx;base64, 前缀）
+      let base64Data = dataURL
+      if (dataURL.startsWith('data:')) {
+        base64Data = dataURL.split(',')[1]
+      }
+      
+      const req = {
+        preset_id: presetID,
+        version_id: versionID,
+        data: base64Data,
+      }
+
+      const resp = await UploadImage(req)
+      return resp
+    } catch (err) {
+      error.value = err.message || '上传失败'
+      return { success: false, error: error.value }
+    } finally {
+      loading.value = false
+    }
+  }
+
   async function getImageByID(id) {
     loading.value = true
     error.value = null
@@ -116,6 +143,7 @@ export const useImageStore = defineStore('image', () => {
     loading,
     error,
     uploadImage,
+    uploadImageBase64,
     getImageByID,
     getImagesByPreset,
     deleteImage,

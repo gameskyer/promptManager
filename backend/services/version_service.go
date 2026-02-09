@@ -351,3 +351,37 @@ func (s *VersionService) GetStarredVersions(presetID uint) ([]models.PresetVersi
 	}
 	return versions, nil
 }
+
+// UpdateVersionPreview updates only the preview images of the current version
+// This does not create a new version, just updates the existing one
+func (s *VersionService) UpdateVersionPreview(presetID uint, thumbnailPath string, previewPaths []string) (*models.PresetVersion, error) {
+	// Get current version
+	var preset models.Preset
+	if err := s.db.First(&preset, presetID).Error; err != nil {
+		return nil, fmt.Errorf("preset not found: %w", err)
+	}
+	
+	var currentVersion models.PresetVersion
+	if err := s.db.Where("preset_id = ? AND version_num = ?", presetID, preset.CurrentVersion).
+		First(&currentVersion).Error; err != nil {
+		return nil, fmt.Errorf("current version not found: %w", err)
+	}
+	
+	// Get current snapshot data
+	snapshot, err := currentVersion.ToSnapshotData()
+	if err != nil {
+		snapshot = &models.SnapshotData{}
+	}
+	
+	// Update only preview-related fields
+	snapshot.PreviewPaths = previewPaths
+	currentVersion.ThumbnailPath = thumbnailPath
+	currentVersion.SetSnapshotData(snapshot)
+	
+	// Save changes
+	if err := s.db.Save(&currentVersion).Error; err != nil {
+		return nil, fmt.Errorf("failed to update version: %w", err)
+	}
+	
+	return &currentVersion, nil
+}

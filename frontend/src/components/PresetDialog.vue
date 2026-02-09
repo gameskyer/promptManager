@@ -263,6 +263,13 @@ const viewerVisible = ref(false)
 const viewerIndex = ref(0)
 
 watch(() => props.preset, (newPreset) => {
+  console.log('[PresetDialog] preset loaded:', {
+    id: newPreset?.id,
+    title: newPreset?.title,
+    thumbnail: newPreset?.thumbnail,
+    previews: newPreset?.previews,
+    previewsLength: newPreset?.previews?.length,
+  })
   if (newPreset) {
     form.value = {
       title: newPreset.title || '',
@@ -283,6 +290,10 @@ watch(() => props.preset, (newPreset) => {
         : [],
       thumbnail: newPreset.thumbnail || '',
     }
+    console.log('[PresetDialog] form initialized:', {
+      thumbnail: form.value.thumbnail,
+      previews: form.value.previews,
+    })
   } else {
     form.value = {
       title: '',
@@ -372,18 +383,32 @@ async function handleSubmit() {
   // 过滤掉空的 LoRA
   const validLoras = form.value.loras.filter(l => l.name.trim() !== '')
   
-  // 提取 base64 图片数据（去掉 data:image/xxx;base64, 前缀）
-  const previewBase64s = form.value.previews
-    .filter(p => p && p.startsWith('data:'))
-    .map(p => p.split(',')[1])
+  // 处理图片：保持原始格式发送，让后端判断
+  // - 新上传的: data:image/xxx;base64,xxxxx
+  // - 已有的: /images/xxx.png
+  const previewData = form.value.previews
+    .filter(p => p && p.trim() !== '')
+    .map(p => p) // 保持原样，不做转换
   
-  emit('save', {
+  // 处理封面：保持原始格式
+  let thumbnailData = form.value.thumbnail || ''
+  
+  const submitData = {
     ...form.value,
     loras: validLoras,
-    previews: previewBase64s,
-    thumbnail: '', // 后端会设置第一张为封面
+    previews: previewData,
+    thumbnail: thumbnailData,
     id: props.preset?.id,
+  }
+  
+  console.log('[PresetDialog] handleSubmit:', {
+    id: submitData.id,
+    thumbnail: submitData.thumbnail?.substring(0, 50),
+    previews: submitData.previews?.map(p => p?.substring(0, 50)),
+    previewsLength: submitData.previews?.length,
   })
+  
+  emit('save', submitData)
 }
 
 async function handleDelete() {

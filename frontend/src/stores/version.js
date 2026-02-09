@@ -14,6 +14,7 @@ import {
   DeleteVersion,
   GetStarredVersions,
   GetVersionDiffStats,
+  UpdateVersionPreview,
 } from '../lib/wailsjs/go/handlers/VersionHandler'
 
 dayjs.extend(relativeTime)
@@ -252,6 +253,34 @@ export const useVersionStore = defineStore('version', () => {
     }
   }
 
+  async function updateVersionPreview(presetId, thumbnailPath, previewPaths) {
+    loading.value = true
+    error.value = null
+    try {
+      const response = await UpdateVersionPreview({
+        preset_id: presetId,
+        thumbnail_path: thumbnailPath,
+        preview_paths: previewPaths,
+      })
+      
+      if (response.success) {
+        // 更新本地版本列表中的当前版本
+        const idx = versions.value.findIndex(v => v.preset_id === presetId && v.version_num === response.data.version_num)
+        if (idx !== -1) {
+          versions.value[idx] = response.data
+        }
+        return response.data
+      } else {
+        throw new Error(response.error || '更新预览图失败')
+      }
+    } catch (e) {
+      error.value = e.message
+      throw e
+    } finally {
+      loading.value = false
+    }
+  }
+
   function setCurrentVersion(version) {
     currentVersion.value = version
   }
@@ -275,6 +304,7 @@ export const useVersionStore = defineStore('version', () => {
     compareVersions,
     deleteVersion,
     getVersionDiffStats,
+    updateVersionPreview,
     setCurrentVersion,
   }
 })

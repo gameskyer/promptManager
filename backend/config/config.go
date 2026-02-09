@@ -21,17 +21,15 @@ func init() {
 	// 使用当前工作目录下的数据库文件
 	DBPath = "./promptmaster.db"
 	
-	// 应用数据目录
-	homeDir, _ := os.UserHomeDir()
-	AppDataDir = filepath.Join(homeDir, ".promptmaster")
+	// 应用数据目录（使用项目相对路径）
+	AppDataDir = "./data"
 	BackupDir = filepath.Join(AppDataDir, "backups")
-	ImageDir = filepath.Join(AppDataDir, "images")
+	ImageDir = "./images"
 }
 
 // EnsureAppDataDir ensures the application data directory exists
 func EnsureAppDataDir() {
-	// 确保数据库所在目录存在（当前目录总是存在，但以防万一）
-	os.MkdirAll(".", 0755)
+	// 确保项目相对路径的目录存在
 	os.MkdirAll(AppDataDir, 0755)
 	os.MkdirAll(BackupDir, 0755)
 	os.MkdirAll(ImageDir, 0755)
