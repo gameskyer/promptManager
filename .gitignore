@@ -36,6 +36,15 @@ Thumbs.db
 *.db-journal
 *.log
 
+# User uploaded images (local data)
+images/
+data/
+
+# API Keys and sensitive config
+*.key
+config.yaml
+config.yml
+
 # Wails
 frontend/wailsjs/
 
