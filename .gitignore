@@ -40,6 +40,9 @@ Thumbs.db
 images/
 data/
 
+# Logs
+logs/
+
 # API Keys and sensitive config
 *.key
 config.yaml
