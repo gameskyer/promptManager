@@ -7,6 +7,14 @@
         <span class="count-badge">共 {{ atomStore.totalCount }} 个</span>
       </div>
       <div class="header-actions">
+        <button 
+          class="btn-secondary" 
+          :class="{ active: isBatchMode }"
+          @click="toggleBatchMode"
+        >
+          <Squares2X2Icon class="w-4 h-4" />
+          {{ isBatchMode ? '退出批量' : '批量操作' }}
+        </button>
         <button class="btn-secondary" @click="exportData">
           <ArrowDownTrayIcon class="w-4 h-4" />
           导出
@@ -14,6 +22,55 @@
         <button class="btn-primary" @click="createAtom">
           <PlusIcon class="w-4 h-4" />
           新建原子词
+        </button>
+      </div>
+    </div>
+
+    <!-- Batch Operations Bar -->
+    <div v-if="isBatchMode" class="batch-bar">
+      <div class="batch-info">
+        <label class="checkbox-wrapper">
+          <input 
+            type="checkbox" 
+            :checked="isAllSelected"
+            @change="toggleSelectAll"
+          />
+          <span>全选本页</span>
+        </label>
+        <span class="batch-count">已选择 {{ selectedCount }} 项</span>
+      </div>
+      <div class="batch-actions">
+        <button 
+          class="btn-batch" 
+          :disabled="selectedCount === 0"
+          @click="showBatchMove = true"
+        >
+          <FolderArrowDownIcon class="w-4 h-4" />
+          移动分类
+        </button>
+        <button 
+          class="btn-batch" 
+          :disabled="selectedCount === 0"
+          @click="showBatchType = true"
+        >
+          <TagIcon class="w-4 h-4" />
+          修改类型
+        </button>
+        <button 
+          class="btn-batch" 
+          :disabled="selectedCount === 0"
+          @click="showBatchSynonyms = true"
+        >
+          <LinkIcon class="w-4 h-4" />
+          添加近义词
+        </button>
+        <button 
+          class="btn-batch danger" 
+          :disabled="selectedCount === 0"
+          @click="confirmBatchDelete"
+        >
+          <TrashIcon class="w-4 h-4" />
+          批量删除
         </button>
       </div>
     </div>
@@ -59,6 +116,13 @@
       <table class="data-table">
         <thead>
           <tr>
+            <th v-if="isBatchMode" class="col-checkbox">
+              <input 
+                type="checkbox" 
+                :checked="isAllSelected"
+                @change="toggleSelectAll"
+              />
+            </th>
             <th class="col-id">ID</th>
             <th class="col-type">类型</th>
             <th class="col-value">英文原词</th>
@@ -66,11 +130,25 @@
             <th class="col-category">所属分类</th>
             <th class="col-synonyms">近义词</th>
             <th class="col-usage">使用次数</th>
-            <th class="col-actions">操作</th>
+            <th v-if="!isBatchMode" class="col-actions">操作</th>
           </tr>
         </thead>
         <tbody>
-          <tr v-for="atom in filteredAtoms" :key="atom.id" :class="{ 'is-deleted': atom.is_deleted }">
+          <tr 
+            v-for="atom in filteredAtoms" 
+            :key="atom.id" 
+            :class="{ 
+              'is-deleted': atom.is_deleted,
+              'is-selected': isSelected(atom.id)
+            }"
+          >
+            <td v-if="isBatchMode" class="col-checkbox">
+              <input 
+                type="checkbox" 
+                :checked="isSelected(atom.id)"
+                @change="toggleSelection(atom.id)"
+              />
+            </td>
             <td class="col-id">{{ atom.id }}</td>
             <td class="col-type">
               <span class="type-badge" :class="atom.type?.toLowerCase()">
@@ -93,7 +171,7 @@
             <td class="col-usage">
               <span class="usage-count">{{ atom.usage_count || 0 }}</span>
             </td>
-            <td class="col-actions">
+            <td v-if="!isBatchMode" class="col-actions">
               <button class="action-btn" @click="editAtom(atom)" title="编辑">
                 <PencilIcon class="w-4 h-4" />
               </button>
@@ -106,7 +184,7 @@
             </td>
           </tr>
           <tr v-if="filteredAtoms.length === 0">
-            <td colspan="8" class="empty-cell">
+            <td :colspan="isBatchMode ? 9 : 8" class="empty-cell">
               <div class="empty-state">
                 <DocumentMagnifyingGlassIcon class="w-12 h-12 text-slate-600" />
                 <p>暂无数据</p>
@@ -151,6 +229,85 @@
       @delete="confirmDeleteAtom"
     />
 
+    <!-- Batch Move Dialog -->
+    <div v-if="showBatchMove" class="modal-overlay" @click="showBatchMove = false">
+      <div class="batch-dialog" @click.stop>
+        <div class="batch-dialog-header">
+          <FolderArrowDownIcon class="w-5 h-5 text-blue-500" />
+          <h3>批量移动分类</h3>
+        </div>
+        <div class="batch-dialog-body">
+          <p class="batch-desc">将选中的 {{ selectedCount }} 个原子词移动到：</p>
+          <select v-model="batchTargetCategory" class="batch-select">
+            <option v-for="cat in categoryStore.atomCategories" :key="cat.id" :value="cat.id">
+              {{ cat.name }}
+            </option>
+          </select>
+        </div>
+        <div class="batch-dialog-footer">
+          <button class="btn-secondary" @click="showBatchMove = false">取消</button>
+          <button class="btn-primary" :disabled="!batchTargetCategory" @click="executeBatchMove">
+            确认移动
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Batch Type Dialog -->
+    <div v-if="showBatchType" class="modal-overlay" @click="showBatchType = false">
+      <div class="batch-dialog" @click.stop>
+        <div class="batch-dialog-header">
+          <TagIcon class="w-5 h-5 text-green-500" />
+          <h3>批量修改类型</h3>
+        </div>
+        <div class="batch-dialog-body">
+          <p class="batch-desc">将选中的 {{ selectedCount }} 个原子词修改为：</p>
+          <div class="batch-type-options">
+            <label class="type-option">
+              <input type="radio" v-model="batchTargetType" value="Positive" />
+              <span class="type-badge positive">正向</span>
+            </label>
+            <label class="type-option">
+              <input type="radio" v-model="batchTargetType" value="Negative" />
+              <span class="type-badge negative">负向</span>
+            </label>
+          </div>
+        </div>
+        <div class="batch-dialog-footer">
+          <button class="btn-secondary" @click="showBatchType = false">取消</button>
+          <button class="btn-primary" :disabled="!batchTargetType" @click="executeBatchType">
+            确认修改
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Batch Synonyms Dialog -->
+    <div v-if="showBatchSynonyms" class="modal-overlay" @click="showBatchSynonyms = false">
+      <div class="batch-dialog" @click.stop>
+        <div class="batch-dialog-header">
+          <LinkIcon class="w-5 h-5 text-purple-500" />
+          <h3>批量添加近义词</h3>
+        </div>
+        <div class="batch-dialog-body">
+          <p class="batch-desc">为选中的 {{ selectedCount }} 个原子词添加近义词：</p>
+          <input 
+            v-model="batchSynonymsInput" 
+            type="text" 
+            class="batch-input"
+            placeholder="输入近义词，用逗号分隔"
+          />
+          <p class="batch-hint">多个近义词用逗号分隔，将合并到现有近义词中</p>
+        </div>
+        <div class="batch-dialog-footer">
+          <button class="btn-secondary" @click="showBatchSynonyms = false">取消</button>
+          <button class="btn-primary" :disabled="!batchSynonymsInput.trim()" @click="executeBatchSynonyms">
+            确认添加
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- Delete Confirm Dialog -->
     <div v-if="showDeleteConfirm" class="modal-overlay" @click="showDeleteConfirm = false">
       <div class="confirm-dialog" @click.stop>
@@ -165,6 +322,24 @@
         <div class="confirm-footer">
           <button class="btn-secondary" @click="showDeleteConfirm = false">取消</button>
           <button class="btn-danger" @click="confirmDelete">删除</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Batch Delete Confirm Dialog -->
+    <div v-if="showBatchDeleteConfirm" class="modal-overlay" @click="showBatchDeleteConfirm = false">
+      <div class="confirm-dialog" @click.stop>
+        <div class="confirm-header">
+          <ExclamationTriangleIcon class="w-6 h-6 text-red-500" />
+          <h3>确认批量删除</h3>
+        </div>
+        <div class="confirm-body">
+          <p>确定要删除选中的 <strong>{{ selectedCount }}</strong> 个原子词吗？</p>
+          <p class="hint">此操作将软删除这些原子词，可以在回收站中恢复。</p>
+        </div>
+        <div class="confirm-footer">
+          <button class="btn-secondary" @click="showBatchDeleteConfirm = false">取消</button>
+          <button class="btn-danger" @click="executeBatchDelete">确认删除</button>
         </div>
       </div>
     </div>
@@ -185,6 +360,10 @@ import {
   DocumentMagnifyingGlassIcon,
   ArrowDownTrayIcon,
   ExclamationTriangleIcon,
+  Squares2X2Icon,
+  FolderArrowDownIcon,
+  TagIcon,
+  LinkIcon,
 } from '@heroicons/vue/24/outline'
 import { useAppStore, useAtomStore, useCategoryStore } from '../stores'
 import AtomDialog from './AtomDialog.vue'
@@ -195,6 +374,7 @@ const categoryStore = useCategoryStore()
 
 const { atoms } = storeToRefs(atomStore)
 const { categories } = storeToRefs(categoryStore)
+const { selectedAtoms, isBatchMode } = storeToRefs(atomStore)
 
 // Filter state
 const filterCategory = ref('')
@@ -211,7 +391,16 @@ const showDeleteConfirm = ref(false)
 const editingAtom = ref(null)
 const deletingAtom = ref(null)
 
-// Filtered atoms
+// Batch operation state
+const showBatchMove = ref(false)
+const showBatchType = ref(false)
+const showBatchSynonyms = ref(false)
+const showBatchDeleteConfirm = ref(false)
+const batchTargetCategory = ref('')
+const batchTargetType = ref('')
+const batchSynonymsInput = ref('')
+
+// Computed
 const filteredAtoms = computed(() => {
   let result = [...atoms.value]
 
@@ -261,6 +450,37 @@ const totalPages = computed(() => {
   return Math.ceil(count / pageSize.value) || 1
 })
 
+const selectedCount = computed(() => selectedAtoms.value.length)
+
+const isAllSelected = computed(() => {
+  if (filteredAtoms.value.length === 0) return false
+  return filteredAtoms.value.every(atom => selectedAtoms.value.includes(atom.id))
+})
+
+const isSelected = (id) => selectedAtoms.value.includes(id)
+
+// Methods
+function toggleBatchMode() {
+  atomStore.setBatchMode(!isBatchMode.value)
+}
+
+function toggleSelection(id) {
+  atomStore.toggleAtomSelection(id)
+}
+
+function toggleSelectAll() {
+  if (isAllSelected.value) {
+    // Deselect all on current page
+    const currentIds = filteredAtoms.value.map(a => a.id)
+    selectedAtoms.value = selectedAtoms.value.filter(id => !currentIds.includes(id))
+  } else {
+    // Select all on current page
+    const currentIds = filteredAtoms.value.map(a => a.id)
+    const newSelection = [...new Set([...selectedAtoms.value, ...currentIds])]
+    atomStore.selectAll(newSelection)
+  }
+}
+
 function getCategoryName(categoryId) {
   const cat = categories.value.find(c => c.id === categoryId)
   return cat?.name || '-'
@@ -296,7 +516,6 @@ function closeAtomDialog() {
 
 async function saveAtom(data) {
   try {
-    // 构建更新数据，排除 category 对象，只保留 category_id
     const updateData = {
       value: data.value,
       label: data.label,
@@ -342,7 +561,6 @@ function confirmDeleteAtom(id) {
 
 function addToWorkbench(atom) {
   appStore.addAtom(atom)
-  // Show notification
   const toast = document.createElement('div')
   toast.className = 'toast-notification'
   toast.textContent = `已添加 "${atom.label || atom.value}" 到工作区`
@@ -363,6 +581,62 @@ async function exportData() {
   } catch (error) {
     console.error('Export failed:', error)
     alert('导出失败: ' + error.message)
+  }
+}
+
+// Batch operations
+function confirmBatchDelete() {
+  showBatchDeleteConfirm.value = true
+}
+
+async function executeBatchMove() {
+  if (!batchTargetCategory.value) return
+  try {
+    const count = await atomStore.batchMoveCategory(batchTargetCategory.value)
+    showBatchMove.value = false
+    batchTargetCategory.value = ''
+    alert(`成功移动 ${count} 个原子词`)
+  } catch (error) {
+    console.error('Batch move failed:', error)
+    alert('批量移动失败: ' + error.message)
+  }
+}
+
+async function executeBatchType() {
+  if (!batchTargetType.value) return
+  try {
+    const count = await atomStore.batchUpdateType(batchTargetType.value)
+    showBatchType.value = false
+    batchTargetType.value = ''
+    alert(`成功修改 ${count} 个原子词的类型`)
+  } catch (error) {
+    console.error('Batch type update failed:', error)
+    alert('批量修改类型失败: ' + error.message)
+  }
+}
+
+async function executeBatchSynonyms() {
+  if (!batchSynonymsInput.value.trim()) return
+  const synonyms = batchSynonymsInput.value.split(',').map(s => s.trim()).filter(Boolean)
+  try {
+    const count = await atomStore.batchAddSynonyms(synonyms)
+    showBatchSynonyms.value = false
+    batchSynonymsInput.value = ''
+    alert(`成功为 ${count} 个原子词添加近义词`)
+  } catch (error) {
+    console.error('Batch add synonyms failed:', error)
+    alert('批量添加近义词失败: ' + error.message)
+  }
+}
+
+async function executeBatchDelete() {
+  try {
+    const count = await atomStore.batchDelete()
+    showBatchDeleteConfirm.value = false
+    alert(`成功删除 ${count} 个原子词`)
+  } catch (error) {
+    console.error('Batch delete failed:', error)
+    alert('批量删除失败: ' + error.message)
   }
 }
 
@@ -442,6 +716,11 @@ watch([filterCategory, filterType, searchKeyword], () => {
   background-color: #0ea5e9;
 }
 
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .btn-secondary {
   background-color: #1e293b;
   color: #94a3b8;
@@ -453,6 +732,12 @@ watch([filterCategory, filterType, searchKeyword], () => {
   color: #e2e8f0;
 }
 
+.btn-secondary.active {
+  background-color: rgba(14, 165, 233, 0.2);
+  border-color: #0ea5e9;
+  color: #0ea5e9;
+}
+
 .btn-danger {
   background-color: #dc2626;
   color: white;
@@ -462,6 +747,83 @@ watch([filterCategory, filterType, searchKeyword], () => {
   background-color: #ef4444;
 }
 
+/* Batch Bar */
+.batch-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px;
+  background-color: rgba(14, 165, 233, 0.1);
+  border-bottom: 1px solid #1e293b;
+  gap: 16px;
+}
+
+.batch-info {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.checkbox-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  color: #e2e8f0;
+}
+
+.checkbox-wrapper input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: #0ea5e9;
+}
+
+.batch-count {
+  font-size: 13px;
+  color: #0ea5e9;
+  font-weight: 500;
+}
+
+.batch-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.btn-batch {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background-color: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  color: #e2e8f0;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-batch:hover:not(:disabled) {
+  background-color: #334155;
+  border-color: #475569;
+}
+
+.btn-batch:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-batch.danger {
+  color: #ef4444;
+  border-color: rgba(239, 68, 68, 0.3);
+}
+
+.btn-batch.danger:hover:not(:disabled) {
+  background-color: rgba(239, 68, 68, 0.2);
+}
+
+/* Filter Bar */
 .filter-bar {
   display: flex;
   gap: 16px;
@@ -540,6 +902,7 @@ watch([filterCategory, filterType, searchKeyword], () => {
   color: #e2e8f0;
 }
 
+/* Table */
 .table-container {
   flex: 1;
   overflow: auto;
@@ -576,6 +939,21 @@ watch([filterCategory, filterType, searchKeyword], () => {
 
 .data-table tbody tr.is-deleted {
   opacity: 0.5;
+}
+
+.data-table tbody tr.is-selected {
+  background-color: rgba(14, 165, 233, 0.1);
+}
+
+.col-checkbox {
+  width: 40px;
+  text-align: center;
+}
+
+.col-checkbox input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: #0ea5e9;
 }
 
 .col-id {
@@ -708,6 +1086,7 @@ watch([filterCategory, filterType, searchKeyword], () => {
   color: #64748b;
 }
 
+/* Pagination */
 .pagination-bar {
   display: flex;
   align-items: center;
@@ -779,7 +1158,8 @@ watch([filterCategory, filterType, searchKeyword], () => {
   padding: 20px;
 }
 
-.confirm-dialog {
+.confirm-dialog,
+.batch-dialog {
   width: 100%;
   max-width: 400px;
   background-color: #0f172a;
@@ -788,7 +1168,12 @@ watch([filterCategory, filterType, searchKeyword], () => {
   overflow: hidden;
 }
 
-.confirm-header {
+.batch-dialog {
+  max-width: 420px;
+}
+
+.confirm-header,
+.batch-dialog-header {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -796,13 +1181,15 @@ watch([filterCategory, filterType, searchKeyword], () => {
   border-bottom: 1px solid #334155;
 }
 
-.confirm-header h3 {
+.confirm-header h3,
+.batch-dialog-header h3 {
   font-size: 16px;
   font-weight: 600;
   color: #e2e8f0;
 }
 
-.confirm-body {
+.confirm-body,
+.batch-dialog-body {
   padding: 20px;
 }
 
@@ -817,14 +1204,61 @@ watch([filterCategory, filterType, searchKeyword], () => {
   color: #64748b;
 }
 
-.confirm-footer {
+.batch-desc {
+  font-size: 14px;
+  color: #94a3b8;
+  margin-bottom: 16px;
+}
+
+.batch-select,
+.batch-input {
+  width: 100%;
+  padding: 10px 12px;
+  background-color: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  color: #e2e8f0;
+  font-size: 14px;
+  outline: none;
+}
+
+.batch-select:focus,
+.batch-input:focus {
+  border-color: #0ea5e9;
+}
+
+.batch-hint {
+  font-size: 12px;
+  color: #64748b;
+  margin-top: 8px;
+}
+
+.batch-type-options {
+  display: flex;
+  gap: 20px;
+}
+
+.type-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.type-option input[type="radio"] {
+  accent-color: #0ea5e9;
+}
+
+.confirm-footer,
+.batch-dialog-footer {
   display: flex;
   gap: 10px;
   padding: 16px 20px;
   border-top: 1px solid #334155;
 }
 
-.confirm-footer button {
+.confirm-footer button,
+.batch-dialog-footer button {
   flex: 1;
 }
 

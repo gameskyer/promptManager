@@ -23,15 +23,17 @@ type AIResponse struct {
 
 // ExplodePromptRequest represents a prompt explosion request
 type ExplodePromptRequest struct {
-	Prompt      string             `json:"prompt"`
-	Categories  []string           `json:"categories,omitempty"`
-	CategoryMap map[string]uint    `json:"category_map,omitempty"` // 分类名称到ID的映射
-	Config      *services.AIConfig `json:"config,omitempty"`
+	Prompt             string             `json:"prompt"`
+	Categories         []string           `json:"categories,omitempty"`
+	CategoryMap        map[string]uint    `json:"category_map,omitempty"` // 分类名称到ID的映射
+	Config             *services.AIConfig `json:"config,omitempty"`
+	SystemPrompt       string             `json:"system_prompt,omitempty"`        // 自定义系统提示词模板
+	UserPromptTemplate string             `json:"user_prompt_template,omitempty"` // 用户提示词模板
 }
 
 // ExplodePrompt uses AI to break down a prompt
 func (h *AIHandler) ExplodePrompt(req ExplodePromptRequest) AIResponse {
-	result, err := h.service.ExplodePrompt(req.Prompt, req.Categories, req.CategoryMap, req.Config)
+	result, err := h.service.ExplodePrompt(req.Prompt, req.Categories, req.CategoryMap, req.Config, req.SystemPrompt, req.UserPromptTemplate)
 	if err != nil {
 		return AIResponse{Success: false, Error: err.Error()}
 	}
@@ -40,13 +42,15 @@ func (h *AIHandler) ExplodePrompt(req ExplodePromptRequest) AIResponse {
 
 // OptimizePromptRequest represents an optimize request
 type OptimizePromptRequest struct {
-	Prompt string             `json:"prompt"`
-	Config *services.AIConfig `json:"config,omitempty"`
+	Prompt             string             `json:"prompt"`
+	Config             *services.AIConfig `json:"config,omitempty"`
+	SystemPrompt       string             `json:"system_prompt,omitempty"`        // 自定义系统提示词模板
+	UserPromptTemplate string             `json:"user_prompt_template,omitempty"` // 用户提示词模板
 }
 
 // OptimizePrompt uses AI to optimize a prompt
 func (h *AIHandler) OptimizePrompt(req OptimizePromptRequest) AIResponse {
-	result, err := h.service.OptimizePrompt(req.Prompt, req.Config)
+	result, err := h.service.OptimizePrompt(req.Prompt, req.Config, req.SystemPrompt, req.UserPromptTemplate)
 	if err != nil {
 		return AIResponse{Success: false, Error: err.Error()}
 	}
@@ -55,13 +59,15 @@ func (h *AIHandler) OptimizePrompt(req OptimizePromptRequest) AIResponse {
 
 // TranslatePromptRequest represents a translate request
 type TranslatePromptRequest struct {
-	Prompt string             `json:"prompt"`
-	Config *services.AIConfig `json:"config,omitempty"`
+	Prompt             string             `json:"prompt"`
+	Config             *services.AIConfig `json:"config,omitempty"`
+	SystemPrompt       string             `json:"system_prompt,omitempty"`        // 自定义系统提示词模板
+	UserPromptTemplate string             `json:"user_prompt_template,omitempty"` // 用户提示词模板
 }
 
 // TranslatePrompt uses AI to translate a prompt
 func (h *AIHandler) TranslatePrompt(req TranslatePromptRequest) AIResponse {
-	result, err := h.service.TranslatePrompt(req.Prompt, req.Config)
+	result, err := h.service.TranslatePrompt(req.Prompt, req.Config, req.SystemPrompt, req.UserPromptTemplate)
 	if err != nil {
 		return AIResponse{Success: false, Error: err.Error()}
 	}
@@ -70,13 +76,15 @@ func (h *AIHandler) TranslatePrompt(req TranslatePromptRequest) AIResponse {
 
 // AnalyzePromptRequest represents an analyze request
 type AnalyzePromptRequest struct {
-	Prompt string             `json:"prompt"`
-	Config *services.AIConfig `json:"config,omitempty"`
+	Prompt             string             `json:"prompt"`
+	Config             *services.AIConfig `json:"config,omitempty"`
+	SystemPrompt       string             `json:"system_prompt,omitempty"`        // 自定义系统提示词模板
+	UserPromptTemplate string             `json:"user_prompt_template,omitempty"` // 用户提示词模板
 }
 
 // AnalyzePrompt uses AI to analyze a prompt
 func (h *AIHandler) AnalyzePrompt(req AnalyzePromptRequest) AIResponse {
-	result, err := h.service.AnalyzePrompt(req.Prompt, req.Config)
+	result, err := h.service.AnalyzePrompt(req.Prompt, req.Config, req.SystemPrompt, req.UserPromptTemplate)
 	if err != nil {
 		return AIResponse{Success: false, Error: err.Error()}
 	}
@@ -136,44 +144,46 @@ func (h *AIHandler) GetAIConfig() AIResponse {
 
 // GenericAIRequest represents a generic AI request for the unified endpoint
 type GenericAIRequest struct {
-	Mode        string             `json:"mode"` // explode, optimize, translate, analyze
-	Prompt      string             `json:"prompt"`
-	Categories  []string           `json:"categories,omitempty"`
-	CategoryMap map[string]uint    `json:"category_map,omitempty"` // 分类名称到ID的映射
-	Config      *services.AIConfig `json:"config,omitempty"`
+	Mode               string             `json:"mode"` // explode, optimize, translate, analyze
+	Prompt             string             `json:"prompt"`
+	Categories         []string           `json:"categories,omitempty"`
+	CategoryMap        map[string]uint    `json:"category_map,omitempty"` // 分类名称到ID的映射
+	Config             *services.AIConfig `json:"config,omitempty"`
+	SystemPrompt       string             `json:"system_prompt,omitempty"`        // 自定义系统提示词模板
+	UserPromptTemplate string             `json:"user_prompt_template,omitempty"` // 用户提示词模板
 }
 
 // ProcessAI handles all AI operations through a unified endpoint
 func (h *AIHandler) ProcessAI(req GenericAIRequest) AIResponse {
 	switch req.Mode {
 	case "explode":
-		result, err := h.service.ExplodePrompt(req.Prompt, req.Categories, req.CategoryMap, req.Config)
+		result, err := h.service.ExplodePrompt(req.Prompt, req.Categories, req.CategoryMap, req.Config, req.SystemPrompt, req.UserPromptTemplate)
 		if err != nil {
 			return AIResponse{Success: false, Error: err.Error()}
 		}
 		return AIResponse{Success: true, Data: result}
-		
+
 	case "optimize":
-		result, err := h.service.OptimizePrompt(req.Prompt, req.Config)
+		result, err := h.service.OptimizePrompt(req.Prompt, req.Config, req.SystemPrompt, req.UserPromptTemplate)
 		if err != nil {
 			return AIResponse{Success: false, Error: err.Error()}
 		}
 		return AIResponse{Success: true, Data: result}
-		
+
 	case "translate":
-		result, err := h.service.TranslatePrompt(req.Prompt, req.Config)
+		result, err := h.service.TranslatePrompt(req.Prompt, req.Config, req.SystemPrompt, req.UserPromptTemplate)
 		if err != nil {
 			return AIResponse{Success: false, Error: err.Error()}
 		}
 		return AIResponse{Success: true, Data: result}
-		
+
 	case "analyze":
-		result, err := h.service.AnalyzePrompt(req.Prompt, req.Config)
+		result, err := h.service.AnalyzePrompt(req.Prompt, req.Config, req.SystemPrompt, req.UserPromptTemplate)
 		if err != nil {
 			return AIResponse{Success: false, Error: err.Error()}
 		}
 		return AIResponse{Success: true, Data: result}
-		
+
 	default:
 		return AIResponse{Success: false, Error: "unknown mode: " + req.Mode}
 	}

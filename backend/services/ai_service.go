@@ -43,7 +43,7 @@ type ExtractedAtom struct {
 	Value        string   `json:"value"`
 	Label        string   `json:"label"`
 	Type         string   `json:"type"`
-	CategoryID   uint     `json:"category"`   // 分类ID
+	CategoryID   uint     `json:"category"`                // 分类ID
 	CategoryName string   `json:"category_name,omitempty"` // 分类名称（用于展示）
 	Synonyms     []string `json:"synonyms"`
 	IsNew        bool     `json:"is_new"`
@@ -70,6 +70,95 @@ type AnalyzeResult struct {
 	Issues      []string          `json:"issues"`
 	Suggestions []string          `json:"suggestions"`
 }
+
+// ========== 默认 Prompt 模板 ==========
+
+// DefaultExplodeSystemPrompt 拆解提示词默认系统模板
+const DefaultExplodeSystemPrompt = `你是一个专业的 AI 图像生成提示词拆解专家。请将用户提供的提示词拆解为原子词列表。
+
+可用分类及其 ID：
+{{category_list}}
+
+规则：
+1. 每个组件应该是一个单一的概念或属性
+2. value 字段使用英文（小写，多词用下划线连接）
+3. label 字段提供中文翻译
+4. type 字段分类为 Positive 或 Negative
+5. category 字段根据可用分类选择最合适的 ID（数字），可选分类：{{category_names}}
+6. 包含相关的近义词
+7. category 必须返回数字（ID），不要返回字符串
+
+请严格返回 JSON 格式：
+{"atoms": [{"value": "masterpiece", "label": "杰作", "type": "Positive", "category": 1, "synonyms": ["best quality"]}]}`
+
+// DefaultExplodeUserPromptTemplate 拆解提示词默认用户模板
+const DefaultExplodeUserPromptTemplate = `{{input}}`
+
+// DefaultOptimizeSystemPrompt 优化提示词默认系统模板
+const DefaultOptimizeSystemPrompt = `你是一个专业的 AI 图像生成提示词优化专家。请优化用户提供的提示词，提升其质量和表达效果。
+
+优化原则：
+1. 保持原意不变的情况下提升描述质量
+2. 添加必要的高质量修饰词
+3. 优化词汇顺序，重要的放前面
+4. 去除重复或冗余的表达
+5. 确保语法正确
+
+请严格返回 JSON 格式：
+{
+  "optimized": "优化后的提示词",
+  "changes": ["修改说明1", "修改说明2"],
+  "suggestions": ["建议1", "建议2"]
+}`
+
+// DefaultOptimizeUserPromptTemplate 优化提示词默认用户模板
+const DefaultOptimizeUserPromptTemplate = `{{input}}`
+
+// DefaultTranslateSystemPrompt 翻译提示词默认系统模板
+const DefaultTranslateSystemPrompt = `你是一个专业的 AI 图像生成提示词翻译专家。请将用户提供的中文提示词翻译成高质量的英文。
+
+翻译原则：
+1. 使用 AI 图像生成领域常用的专业术语
+2. 保持提示词的顺序和结构
+3. 使用英文逗号分隔
+4. 确保翻译准确且地道
+5. 提取关键概念作为关键词
+
+请严格返回 JSON 格式：
+{
+  "translation": "英文翻译结果",
+  "keywords": ["关键词1", "关键词2"],
+  "notes": "翻译备注说明"
+}`
+
+// DefaultTranslateUserPromptTemplate 翻译提示词默认用户模板
+const DefaultTranslateUserPromptTemplate = `{{input}}`
+
+// DefaultAnalyzeSystemPrompt 分析提示词默认系统模板
+const DefaultAnalyzeSystemPrompt = `你是一个专业的 AI 图像生成提示词分析专家。请分析用户提供的提示词的结构和效果。
+
+分析维度：
+1. subject - 主体内容描述
+2. style - 艺术风格
+3. quality - 质量相关词汇
+4. lighting - 光照效果
+5. other - 其他重要元素
+
+请严格返回 JSON 格式：
+{
+  "analysis": {
+    "subject": "主体分析",
+    "style": "风格分析",
+    "quality": "质量分析",
+    "lighting": "光照分析",
+    "other": "其他分析"
+  },
+  "issues": ["问题1", "问题2"],
+  "suggestions": ["建议1", "建议2"]
+}`
+
+// DefaultAnalyzeUserPromptTemplate 分析提示词默认用户模板
+const DefaultAnalyzeUserPromptTemplate = `{{input}}`
 
 // shouldCallAI 检查是否应该调用AI API
 // Ollama 不需要 API Key，其他提供商需要
@@ -102,35 +191,45 @@ func NewAIService(db *gorm.DB) *AIService {
 }
 
 // ExplodePrompt uses AI to break down a long prompt into atomic words
-func (s *AIService) ExplodePrompt(prompt string, categories []string, categoryMap map[string]uint, config *AIConfig) (*ExplodeResult, error) {
+func (s *AIService) ExplodePrompt(prompt string, categories []string, categoryMap map[string]uint, config *AIConfig, systemPrompt string, userPromptTemplate string) (*ExplodeResult, error) {
 	if config == nil || !s.shouldCallAI(config) {
 		return s.ruleBasedExplosion(prompt, categoryMap)
 	}
-	return s.aiBasedExplosion(prompt, categories, categoryMap, config)
+	return s.aiBasedExplosion(prompt, categories, categoryMap, config, systemPrompt, userPromptTemplate)
 }
 
 // OptimizePrompt uses AI to optimize a prompt
-func (s *AIService) OptimizePrompt(prompt string, config *AIConfig) (*OptimizeResult, error) {
+func (s *AIService) OptimizePrompt(prompt string, config *AIConfig, systemPrompt string, userPromptTemplate string) (*OptimizeResult, error) {
 	if config == nil || !s.shouldCallAI(config) {
 		return s.ruleBasedOptimization(prompt)
 	}
-	return s.aiBasedOptimization(prompt, config)
+	return s.aiBasedOptimization(prompt, config, systemPrompt, userPromptTemplate)
 }
 
 // TranslatePrompt uses AI to translate a prompt
-func (s *AIService) TranslatePrompt(prompt string, config *AIConfig) (*TranslateResult, error) {
+func (s *AIService) TranslatePrompt(prompt string, config *AIConfig, systemPrompt string, userPromptTemplate string) (*TranslateResult, error) {
 	if config == nil || !s.shouldCallAI(config) {
 		return s.ruleBasedTranslation(prompt)
 	}
-	return s.aiBasedTranslation(prompt, config)
+	return s.aiBasedTranslation(prompt, config, systemPrompt, userPromptTemplate)
 }
 
 // AnalyzePrompt uses AI to analyze a prompt
-func (s *AIService) AnalyzePrompt(prompt string, config *AIConfig) (*AnalyzeResult, error) {
+func (s *AIService) AnalyzePrompt(prompt string, config *AIConfig, systemPrompt string, userPromptTemplate string) (*AnalyzeResult, error) {
 	if config == nil || !s.shouldCallAI(config) {
 		return s.ruleBasedAnalysis(prompt)
 	}
-	return s.aiBasedAnalysis(prompt, config)
+	return s.aiBasedAnalysis(prompt, config, systemPrompt, userPromptTemplate)
+}
+
+// renderTemplate 渲染模板，替换变量
+func (s *AIService) renderTemplate(template string, variables map[string]string) string {
+	result := template
+	for key, value := range variables {
+		placeholder := "{{" + key + "}}"
+		result = strings.ReplaceAll(result, placeholder, value)
+	}
+	return result
 }
 
 // ruleBasedExplosion extracts atoms using rule-based parsing
@@ -175,30 +274,30 @@ func (s *AIService) ruleBasedExplosion(prompt string, categoryMap map[string]uin
 }
 
 // aiBasedExplosion uses AI API to extract atoms
-func (s *AIService) aiBasedExplosion(prompt string, categories []string, categoryMap map[string]uint, config *AIConfig) (*ExplodeResult, error) {
+func (s *AIService) aiBasedExplosion(prompt string, categories []string, categoryMap map[string]uint, config *AIConfig, customSystemPrompt string, userPromptTemplate string) (*ExplodeResult, error) {
 	// 如果 categoryMap 为空，使用默认分类
 	if len(categoryMap) == 0 {
 		categoryMap = map[string]uint{
-			"质量":    1,
-			"人物":    2,
-			"姿势":    3,
-			"场景":    4,
-			"服装":    5,
-			"发型":    6,
-			"道具":    7,
-			"风格":    8,
-			"光照":    9,
-			"其他":    10,
+			"质量": 1,
+			"人物": 2,
+			"姿势": 3,
+			"场景": 4,
+			"服装": 5,
+			"发型": 6,
+			"道具": 7,
+			"风格": 8,
+			"光照": 9,
+			"其他": 10,
 		}
 	}
-	
+
 	// 构建分类列表（名称:ID格式）
 	var categoryEntries []string
 	for name, id := range categoryMap {
 		categoryEntries = append(categoryEntries, fmt.Sprintf("%s(%d)", name, id))
 	}
 	categoryList := strings.Join(categoryEntries, ", ")
-	
+
 	// 构建分类名称列表（用于AI理解）
 	var categoryNames []string
 	for name := range categoryMap {
@@ -206,24 +305,30 @@ func (s *AIService) aiBasedExplosion(prompt string, categories []string, categor
 	}
 	categoryNameList := strings.Join(categoryNames, ", ")
 
-	systemPrompt := fmt.Sprintf(`You are a prompt engineering expert for AI image generation. Break down the following prompt into atomic components.
+	// 确定使用的 systemPrompt
+	systemPrompt := customSystemPrompt
+	if systemPrompt == "" {
+		systemPrompt = DefaultExplodeSystemPrompt
+	}
 
-Available categories with their IDs:
-%s
+	// 渲染 systemPrompt 模板变量
+	systemPrompt = s.renderTemplate(systemPrompt, map[string]string{
+		"category_list":  categoryList,
+		"category_names": categoryNameList,
+	})
 
-Rules:
-1. Each component should be a single concept or attribute
-2. Use English for value field (lowercase, underscore for multi-word)
-3. Provide Chinese translation in label field
-4. Classify as Positive or Negative type
-5. Assign category ID (number) based on the available categories above. Choose the most appropriate category ID from: %s
-6. Include relevant synonyms
-7. Return category as a NUMBER (ID), NOT as a string
+	// 确定使用的 userPromptTemplate
+	userTemplate := userPromptTemplate
+	if userTemplate == "" {
+		userTemplate = DefaultExplodeUserPromptTemplate
+	}
 
-Return JSON format strictly:
-{"atoms": [{"value": "masterpiece", "label": "杰作", "type": "Positive", "category": 1, "synonyms": ["best quality"]}]}`, categoryList, categoryNameList)
+	// 渲染用户提示词
+	userPrompt := s.renderTemplate(userTemplate, map[string]string{
+		"input": prompt,
+	})
 
-	response, err := s.callAIAPI(config, systemPrompt, prompt)
+	response, err := s.callAIAPI(config, systemPrompt, userPrompt)
 	if err != nil {
 		return nil, err
 	}
@@ -252,7 +357,7 @@ Return JSON format strictly:
 		} else {
 			result.Atoms[i].IsNew = true
 		}
-		
+
 		// 根据CategoryID查找分类名称（对于新词或数据库中没有分类的词）
 		if result.Atoms[i].CategoryName == "" && result.Atoms[i].CategoryID > 0 {
 			for name, id := range categoryMap {
@@ -262,7 +367,7 @@ Return JSON format strictly:
 				}
 			}
 		}
-		
+
 		// 如果仍然没有分类名称，标记为未分类
 		if result.Atoms[i].CategoryName == "" {
 			result.Atoms[i].CategoryName = "未分类"
@@ -273,10 +378,25 @@ Return JSON format strictly:
 }
 
 // aiBasedOptimization uses AI to optimize prompt
-func (s *AIService) aiBasedOptimization(prompt string, config *AIConfig) (*OptimizeResult, error) {
-	systemPrompt := "You are an AI image generation prompt optimization expert. Optimize the given prompt for better quality and results. Return JSON format strictly: {\"optimized\": \"optimized prompt\", \"changes\": [\"change 1\"], \"suggestions\": [\"suggestion 1\"]}"
+func (s *AIService) aiBasedOptimization(prompt string, config *AIConfig, customSystemPrompt string, userPromptTemplate string) (*OptimizeResult, error) {
+	// 确定使用的 systemPrompt
+	systemPrompt := customSystemPrompt
+	if systemPrompt == "" {
+		systemPrompt = DefaultOptimizeSystemPrompt
+	}
 
-	response, err := s.callAIAPI(config, systemPrompt, prompt)
+	// 确定使用的 userPromptTemplate
+	userTemplate := userPromptTemplate
+	if userTemplate == "" {
+		userTemplate = DefaultOptimizeUserPromptTemplate
+	}
+
+	// 渲染用户提示词
+	userPrompt := s.renderTemplate(userTemplate, map[string]string{
+		"input": prompt,
+	})
+
+	response, err := s.callAIAPI(config, systemPrompt, userPrompt)
 	if err != nil {
 		return nil, err
 	}
@@ -294,10 +414,25 @@ func (s *AIService) aiBasedOptimization(prompt string, config *AIConfig) (*Optim
 }
 
 // aiBasedTranslation uses AI to translate prompt
-func (s *AIService) aiBasedTranslation(prompt string, config *AIConfig) (*TranslateResult, error) {
-	systemPrompt := "You are a professional translator for AI image generation prompts. Translate the given Chinese prompt into high-quality English. Return JSON format strictly: {\"translation\": \"English text\", \"keywords\": [\"keyword1\"], \"notes\": \"notes\"}"
+func (s *AIService) aiBasedTranslation(prompt string, config *AIConfig, customSystemPrompt string, userPromptTemplate string) (*TranslateResult, error) {
+	// 确定使用的 systemPrompt
+	systemPrompt := customSystemPrompt
+	if systemPrompt == "" {
+		systemPrompt = DefaultTranslateSystemPrompt
+	}
 
-	response, err := s.callAIAPI(config, systemPrompt, prompt)
+	// 确定使用的 userPromptTemplate
+	userTemplate := userPromptTemplate
+	if userTemplate == "" {
+		userTemplate = DefaultTranslateUserPromptTemplate
+	}
+
+	// 渲染用户提示词
+	userPrompt := s.renderTemplate(userTemplate, map[string]string{
+		"input": prompt,
+	})
+
+	response, err := s.callAIAPI(config, systemPrompt, userPrompt)
 	if err != nil {
 		return nil, err
 	}
@@ -315,10 +450,25 @@ func (s *AIService) aiBasedTranslation(prompt string, config *AIConfig) (*Transl
 }
 
 // aiBasedAnalysis uses AI to analyze prompt
-func (s *AIService) aiBasedAnalysis(prompt string, config *AIConfig) (*AnalyzeResult, error) {
-	systemPrompt := "You are an AI image generation prompt analysis expert. Analyze the given prompt. Return JSON format strictly: {\"analysis\": {\"subject\": \"desc\", \"style\": \"desc\", \"quality\": \"desc\", \"lighting\": \"desc\", \"other\": \"desc\"}, \"issues\": [], \"suggestions\": []}"
+func (s *AIService) aiBasedAnalysis(prompt string, config *AIConfig, customSystemPrompt string, userPromptTemplate string) (*AnalyzeResult, error) {
+	// 确定使用的 systemPrompt
+	systemPrompt := customSystemPrompt
+	if systemPrompt == "" {
+		systemPrompt = DefaultAnalyzeSystemPrompt
+	}
 
-	response, err := s.callAIAPI(config, systemPrompt, prompt)
+	// 确定使用的 userPromptTemplate
+	userTemplate := userPromptTemplate
+	if userTemplate == "" {
+		userTemplate = DefaultAnalyzeUserPromptTemplate
+	}
+
+	// 渲染用户提示词
+	userPrompt := s.renderTemplate(userTemplate, map[string]string{
+		"input": prompt,
+	})
+
+	response, err := s.callAIAPI(config, systemPrompt, userPrompt)
 	if err != nil {
 		return nil, err
 	}
@@ -618,7 +768,7 @@ func (s *AIService) ImportExtractedAtoms(result *ExplodeResult, defaultCategoryI
 		if atomCategoryID == 0 {
 			atomCategoryID = defaultCategoryID
 		}
-		
+
 		if atom.IsNew {
 			_, err := s.atomService.CreateAtom(
 				atom.Value,

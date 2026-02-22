@@ -13,6 +13,13 @@ import {
   GetAllAtomsPaginated,
   ExportAtoms,
 } from '../lib/wailsjs/go/handlers/AtomHandler'
+import {
+  BatchMoveCategory,
+  BatchUpdateType,
+  BatchDelete,
+  BatchAddSynonyms,
+  BatchClearCategory,
+} from '../lib/wailsjs/go/handlers/BatchHandler'
 
 export const useAtomStore = defineStore('atom', () => {
   // State
@@ -22,6 +29,10 @@ export const useAtomStore = defineStore('atom', () => {
   const currentPage = ref(1)
   const totalCount = ref(0)
   const pageSize = ref(50)
+  
+  // Batch operation state
+  const selectedAtoms = ref([])
+  const isBatchMode = ref(false)
 
   // Getters
   const getAtomsByCategory = computed(() => (categoryId) =>
@@ -247,6 +258,150 @@ export const useAtomStore = defineStore('atom', () => {
     }
   }
 
+  // Batch operations
+  function toggleAtomSelection(atomId) {
+    const index = selectedAtoms.value.indexOf(atomId)
+    if (index === -1) {
+      selectedAtoms.value.push(atomId)
+    } else {
+      selectedAtoms.value.splice(index, 1)
+    }
+  }
+
+  function selectAll(atomIds) {
+    selectedAtoms.value = [...atomIds]
+  }
+
+  function clearSelection() {
+    selectedAtoms.value = []
+  }
+
+  function setBatchMode(mode) {
+    isBatchMode.value = mode
+    if (!mode) {
+      clearSelection()
+    }
+  }
+
+  async function batchMoveCategory(categoryId) {
+    loading.value = true
+    error.value = null
+    try {
+      const response = await BatchMoveCategory({
+        atom_ids: selectedAtoms.value,
+        category_id: categoryId,
+      })
+      
+      if (response.success) {
+        clearSelection()
+        await fetchAtoms()
+        return response.data?.moved_count || 0
+      } else {
+        throw new Error(response.error || '批量移动失败')
+      }
+    } catch (e) {
+      error.value = e.message
+      throw e
+    } finally {
+      loading.value = false
+    }
+  }
+
+  async function batchUpdateType(type) {
+    loading.value = true
+    error.value = null
+    try {
+      const response = await BatchUpdateType({
+        atom_ids: selectedAtoms.value,
+        type: type,
+      })
+      
+      if (response.success) {
+        clearSelection()
+        await fetchAtoms()
+        return response.data?.updated_count || 0
+      } else {
+        throw new Error(response.error || '批量更新类型失败')
+      }
+    } catch (e) {
+      error.value = e.message
+      throw e
+    } finally {
+      loading.value = false
+    }
+  }
+
+  async function batchDelete() {
+    loading.value = true
+    error.value = null
+    try {
+      const response = await BatchDelete({
+        atom_ids: selectedAtoms.value,
+      })
+      
+      if (response.success) {
+        const deletedCount = response.data?.deleted_count || 0
+        atoms.value = atoms.value.filter(a => !selectedAtoms.value.includes(a.id))
+        clearSelection()
+        return deletedCount
+      } else {
+        throw new Error(response.error || '批量删除失败')
+      }
+    } catch (e) {
+      error.value = e.message
+      throw e
+    } finally {
+      loading.value = false
+    }
+  }
+
+  async function batchAddSynonyms(synonyms) {
+    loading.value = true
+    error.value = null
+    try {
+      const response = await BatchAddSynonyms({
+        atom_ids: selectedAtoms.value,
+        synonyms: synonyms,
+      })
+      
+      if (response.success) {
+        clearSelection()
+        await fetchAtoms()
+        return response.data?.updated_count || 0
+      } else {
+        throw new Error(response.error || '批量添加近义词失败')
+      }
+    } catch (e) {
+      error.value = e.message
+      throw e
+    } finally {
+      loading.value = false
+    }
+  }
+
+  async function batchClearCategory() {
+    loading.value = true
+    error.value = null
+    try {
+      const response = await BatchClearCategory({
+        atom_ids: selectedAtoms.value,
+      })
+      
+      if (response.success) {
+        clearSelection()
+        await fetchAtoms()
+        return response.data?.cleared_count || 0
+      } else {
+        throw new Error(response.error || '批量清除分类失败')
+      }
+    } catch (e) {
+      error.value = e.message
+      throw e
+    } finally {
+      loading.value = false
+    }
+  }
+
   return {
     atoms,
     loading,
@@ -266,5 +421,17 @@ export const useAtomStore = defineStore('atom', () => {
     fetchPopularAtoms,
     batchImport,
     exportAtoms,
+    // Batch operations
+    selectedAtoms,
+    isBatchMode,
+    toggleAtomSelection,
+    selectAll,
+    clearSelection,
+    setBatchMode,
+    batchMoveCategory,
+    batchUpdateType,
+    batchDelete,
+    batchAddSynonyms,
+    batchClearCategory,
   }
 })

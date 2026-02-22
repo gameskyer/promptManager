@@ -12,7 +12,7 @@ import (
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
-	
+
 	"promptmaster/backend/config"
 	"promptmaster/backend/handlers"
 	"promptmaster/backend/models"
@@ -49,9 +49,9 @@ func imageMiddleware(next http.Handler) http.Handler {
 			imageName = strings.ReplaceAll(imageName, "\\", "/")
 			imageName = filepath.Base(imageName)
 			imagePath := filepath.Join(config.ImageDir, imageName)
-			
+
 			fmt.Printf("[DEBUG] Serving image: %s -> %s\n", r.URL.Path, imagePath)
-			
+
 			// 安全检查：确保路径在 ImageDir 内
 			absPath, err := filepath.Abs(imagePath)
 			if err != nil {
@@ -63,18 +63,18 @@ func imageMiddleware(next http.Handler) http.Handler {
 				http.Error(w, "Access denied", http.StatusForbidden)
 				return
 			}
-			
+
 			// 检查文件是否存在
 			if _, err := os.Stat(imagePath); os.IsNotExist(err) {
 				http.Error(w, "File not found", http.StatusNotFound)
 				return
 			}
-			
+
 			// 提供文件
 			http.ServeFile(w, r, imagePath)
 			return
 		}
-		
+
 		// 非图片请求，交给下一个 handler
 		if next != nil {
 			next.ServeHTTP(w, r)
@@ -87,21 +87,21 @@ func imageMiddleware(next http.Handler) http.Handler {
 func main() {
 	// Ensure app data directory exists
 	config.EnsureAppDataDir()
-	
+
 	// Initialize database
 	db, err := models.InitDB()
 	if err != nil {
 		fmt.Printf("Failed to initialize database: %v\n", err)
 		os.Exit(1)
 	}
-	
+
 	// Run seeder to import default data
 	seeder := utils.NewSeeder(db)
 	if err := seeder.SeedAll(); err != nil {
 		fmt.Printf("Warning: Failed to seed database: %v\n", err)
 		// Don't exit, continue with empty database
 	}
-	
+
 	// Initialize services
 	atomService := services.NewAtomService(db)
 	presetService := services.NewPresetService(db)
@@ -111,7 +111,8 @@ func main() {
 	aiService := services.NewAIService(db)
 	imageService := services.NewImageService(db)
 	backupService := services.NewBackupService(db)
-	
+	batchService := services.NewBatchService(db)
+
 	// Initialize handlers
 	atomHandler := handlers.NewAtomHandler(atomService)
 	presetHandler := handlers.NewPresetHandler(presetService)
@@ -122,10 +123,11 @@ func main() {
 	seederHandler := handlers.NewSeederHandler(seeder)
 	imageHandler := handlers.NewImageHandler(imageService)
 	backupHandler := handlers.NewBackupHandler(backupService)
-	
+	batchHandler := handlers.NewBatchHandler(batchService)
+
 	// Create app
 	app := NewApp()
-	
+
 	err = wails.Run(&options.App{
 		Title:     "PromptMaster - AI绘画提示词管理",
 		Width:     1200,
@@ -148,6 +150,7 @@ func main() {
 			seederHandler,
 			imageHandler,
 			backupHandler,
+			batchHandler,
 		},
 	})
 

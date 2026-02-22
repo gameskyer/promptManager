@@ -22,229 +22,241 @@
       </div>
       
       <div class="modal-body">
-        <!-- AI 和 Prompt 选择 -->
-        <div class="selectors">
-          <div class="selector">
-            <label>AI 提供商</label>
-            <select v-model="selectedProviderId" @change="onProviderChange">
-              <option 
-                v-for="provider in aiStore.providers" 
-                :key="provider.id" 
-                :value="provider.id"
-                :disabled="!provider.enabled"
-              >
-                {{ provider.name }} {{ !provider.enabled ? '(未配置)' : '' }}
-              </option>
-            </select>
-          </div>
-          
-          <div class="selector">
-            <label>功能模式</label>
-            <select v-model="selectedPromptId" @change="onPromptChange">
-              <option 
-                v-for="prompt in aiStore.availablePrompts" 
-                :key="prompt.id" 
-                :value="prompt.id"
-              >
-                {{ prompt.name }}
-              </option>
-            </select>
-          </div>
-        </div>
-        
-        <!-- 模型选择（仅Ollama显示） -->
-        <div v-if="isOllamaProvider" class="model-selector">
-          <div class="selector">
-            <label>选择模型</label>
-            <div class="model-select-wrapper">
-              <select 
-                v-model="selectedModel" 
-                @change="onModelChange"
-                :disabled="aiStore.availableModels.length === 0 || isLoadingModels"
-              >
-                <option v-if="isLoadingModels" value="">加载中...</option>
-                <option v-else-if="aiStore.availableModels.length === 0" value="">暂无可用模型</option>
+        <!-- 左侧面板：输入和配置 -->
+        <div class="left-panel">
+          <!-- AI 和 Prompt 选择 -->
+          <div class="selectors">
+            <div class="selector">
+              <label>AI 提供商</label>
+              <select v-model="selectedProviderId" @change="onProviderChange">
                 <option 
-                  v-for="model in aiStore.availableModels" 
-                  :key="model" 
-                  :value="model"
+                  v-for="provider in aiStore.providers" 
+                  :key="provider.id" 
+                  :value="provider.id"
+                  :disabled="!provider.enabled"
                 >
-                  {{ model }}
+                  {{ provider.name }} {{ !provider.enabled ? '(未配置)' : '' }}
                 </option>
               </select>
-              <button 
-                class="refresh-btn" 
-                @click="refreshModels"
-                :disabled="isLoadingModels"
-                title="刷新模型列表"
-              >
-                <ArrowPathIcon v-if="!isLoadingModels" class="w-4 h-4" />
-                <div v-else class="spinner-small"></div>
-              </button>
             </div>
-          </div>
-          <div v-if="modelError" class="model-error">
-            <ExclamationTriangleIcon class="w-4 h-4 flex-shrink-0" />
-            <pre class="error-text">{{ modelError }}</pre>
-          </div>
-        </div>
-        
-        <!-- 当前 Prompt 描述 -->
-        <div v-if="currentPrompt" class="prompt-desc">
-          <SparklesIcon class="w-4 h-4" />
-          {{ currentPrompt.description }}
-        </div>
-        
-        <!-- 输入区域 -->
-        <div class="input-section">
-          <label>输入提示词</label>
-          <textarea
-            v-model="inputPrompt"
-            :placeholder="inputPlaceholder"
-            rows="5"
-          ></textarea>
-          
-          <!-- 错误提示 -->
-          <div v-if="error" class="error-message">
-            {{ error }}
-          </div>
-          
-          <button 
-            class="explode-btn"
-            :disabled="!inputPrompt.trim() || aiStore.isLoading || !aiStore.isConfigured"
-            @click="handleSubmit"
-          >
-            <SparklesIcon v-if="!aiStore.isLoading" class="w-4 h-4" />
-            <div v-else class="spinner"></div>
-            {{ aiStore.isLoading ? '处理中...' : '开始处理' }}
-          </button>
-          
-          <div v-if="!aiStore.isConfigured" class="warning-message">
-            <ExclamationTriangleIcon class="w-4 h-4" />
-            请先在设置中配置 AI API
-          </div>
-        </div>
-        
-        <!-- 结果区域 -->
-        <div v-if="result" class="result-section">
-          <div class="result-header">
-            <span>处理结果</span>
-            <div class="result-actions">
-              <button class="action-btn" @click="copyResult">
-                <ClipboardDocumentIcon class="w-4 h-4" />
-                复制
-              </button>
-              <button v-if="canImport" class="action-btn import" @click="handleImport">
-                <ArrowDownTrayIcon class="w-4 h-4" />
-                导入
-              </button>
+            
+            <div class="selector">
+              <label>功能模式</label>
+              <select v-model="selectedPromptId" @change="onPromptChange">
+                <option 
+                  v-for="prompt in aiStore.availablePrompts" 
+                  :key="prompt.id" 
+                  :value="prompt.id"
+                >
+                  {{ prompt.name }}
+                </option>
+              </select>
             </div>
           </div>
           
-          <!-- 拆解结果 -->
-          <div v-if="result.atoms" class="atoms-result">
-            <div class="atoms-header">
-              <span>共 {{ result.atoms.length }} 个原子词</span>
-              <div class="category-legend">
-                <span class="legend-item new">新词</span>
-                <span class="legend-item existing">已存在</span>
-              </div>
-            </div>
-            <div
-              v-for="(atom, index) in result.atoms"
-              :key="index"
-              class="atom-item"
-              :class="{ 'is-new': atom.is_new }"
-            >
-              <div class="atom-main">
-                <div class="atom-info">
-                  <div class="atom-value">{{ atom.value }}</div>
-                  <div class="atom-label">{{ atom.label }}</div>
-                </div>
-                <div class="atom-meta">
-                  <span v-if="atom.type" class="atom-type" :class="atom.type">{{ atom.type }}</span>
-                </div>
-              </div>
-              <div class="atom-category-row">
-                <label>分类:</label>
-                <select v-model="atom.category" class="category-select">
-                  <option v-for="cat in availableCategories" :key="cat.id" :value="cat.id">
-                    {{ cat.name }}
+          <!-- 模型选择（仅Ollama显示） -->
+          <div v-if="isOllamaProvider" class="model-selector">
+            <div class="selector">
+              <label>选择模型</label>
+              <div class="model-select-wrapper">
+                <select 
+                  v-model="selectedModel" 
+                  @change="onModelChange"
+                  :disabled="aiStore.availableModels.length === 0 || isLoadingModels"
+                >
+                  <option v-if="isLoadingModels" value="">加载中...</option>
+                  <option v-else-if="aiStore.availableModels.length === 0" value="">暂无可用模型</option>
+                  <option 
+                    v-for="model in aiStore.availableModels" 
+                    :key="model" 
+                    :value="model"
+                  >
+                    {{ model }}
                   </option>
                 </select>
-                <span class="category-name">{{ getCategoryNameById(atom.category) }}</span>
+                <button 
+                  class="refresh-btn" 
+                  @click="refreshModels"
+                  :disabled="isLoadingModels"
+                  title="刷新模型列表"
+                >
+                  <ArrowPathIcon v-if="!isLoadingModels" class="w-4 h-4" />
+                  <div v-else class="spinner-small"></div>
+                </button>
               </div>
-              <div v-if="atom.synonyms?.length" class="atom-synonyms">
-                <span class="synonyms-label">近义词:</span>
-                <span class="synonyms-list">{{ atom.synonyms.join(', ') }}</span>
-              </div>
+            </div>
+            <div v-if="modelError" class="model-error">
+              <ExclamationTriangleIcon class="w-4 h-4 flex-shrink-0" />
+              <pre class="error-text">{{ modelError }}</pre>
             </div>
           </div>
           
-          <!-- 优化结果 -->
-          <div v-else-if="result.optimized" class="text-result">
-            <div class="result-block">
-              <label>优化后：</label>
-              <div class="result-text">{{ result.optimized }}</div>
+          <!-- 当前 Prompt 描述 -->
+          <div v-if="currentPrompt" class="prompt-desc">
+            <SparklesIcon class="w-4 h-4" />
+            {{ currentPrompt.description }}
+          </div>
+          
+          <!-- 输入区域 -->
+          <div class="input-section">
+            <label>输入提示词</label>
+            <textarea
+              v-model="inputPrompt"
+              :placeholder="inputPlaceholder"
+              rows="8"
+            ></textarea>
+            
+            <!-- 错误提示 -->
+            <div v-if="error" class="error-message">
+              {{ error }}
             </div>
-            <div v-if="result.changes?.length" class="result-block">
-              <label>修改说明：</label>
-              <ul>
-                <li v-for="(change, i) in result.changes" :key="i">{{ change }}</li>
-              </ul>
-            </div>
-            <button class="apply-btn" @click="applyToPreset">
-              <CheckIcon class="w-4 h-4" />
-              应用到当前预设
+            
+            <button 
+              class="explode-btn"
+              :disabled="!inputPrompt.trim() || aiStore.isLoading || !aiStore.isConfigured"
+              @click="handleSubmit"
+            >
+              <SparklesIcon v-if="!aiStore.isLoading" class="w-4 h-4" />
+              <div v-else class="spinner"></div>
+              {{ aiStore.isLoading ? '处理中...' : '开始处理' }}
             </button>
+            
+            <div v-if="!aiStore.isConfigured" class="warning-message">
+              <ExclamationTriangleIcon class="w-4 h-4" />
+              请先在设置中配置 AI API
+            </div>
+          </div>
+        </div>
+        
+        <!-- 右侧面板：结果展示 -->
+        <div class="right-panel">
+          <div v-if="!result" class="empty-result">
+            <SparklesIcon class="w-12 h-12 text-slate-600" />
+            <p>在左侧输入内容并开始处理</p>
+            <p class="empty-hint">AI 处理结果将在此处显示</p>
           </div>
           
-          <!-- 翻译结果 -->
-          <div v-else-if="result.translation" class="text-result">
-            <div class="result-block">
-              <label>翻译结果：</label>
-              <div class="result-text">{{ result.translation }}</div>
-            </div>
-            <div v-if="result.keywords?.length" class="result-block">
-              <label>关键词：</label>
-              <div class="keyword-tags">
-                <span v-for="kw in result.keywords" :key="kw" class="keyword-tag">{{ kw }}</span>
+          <!-- 结果区域 -->
+          <div v-else class="result-section">
+            <div class="result-header">
+              <span>处理结果</span>
+              <div class="result-actions">
+                <button class="action-btn" @click="copyResult">
+                  <ClipboardDocumentIcon class="w-4 h-4" />
+                  复制
+                </button>
+                <button v-if="canImport" class="action-btn import" @click="handleImport">
+                  <ArrowDownTrayIcon class="w-4 h-4" />
+                  导入
+                </button>
               </div>
             </div>
-          </div>
-          
-          <!-- 分析结果 -->
-          <div v-else-if="result.analysis" class="text-result">
-            <div class="analysis-grid">
-              <div v-for="(value, key) in result.analysis" :key="key" class="analysis-item">
-                <label>{{ getAnalysisLabel(key) }}：</label>
-                <span>{{ value }}</span>
+            
+            <!-- 拆解结果 -->
+            <div v-if="result.atoms" class="atoms-result">
+              <div class="atoms-header">
+                <span>共 {{ result.atoms.length }} 个原子词</span>
+                <div class="category-legend">
+                  <span class="legend-item new">新词</span>
+                  <span class="legend-item existing">已存在</span>
+                </div>
+              </div>
+              <div
+                v-for="(atom, index) in result.atoms"
+                :key="index"
+                class="atom-item"
+                :class="{ 'is-new': atom.is_new }"
+              >
+                <div class="atom-main">
+                  <div class="atom-info">
+                    <div class="atom-value">{{ atom.value }}</div>
+                    <div class="atom-label">{{ atom.label }}</div>
+                  </div>
+                  <div class="atom-meta">
+                    <span v-if="atom.type" class="atom-type" :class="atom.type">{{ atom.type }}</span>
+                  </div>
+                </div>
+                <div class="atom-category-row">
+                  <label>分类:</label>
+                  <select v-model="atom.category" class="category-select">
+                    <option v-for="cat in availableCategories" :key="cat.id" :value="cat.id">
+                      {{ cat.name }}
+                    </option>
+                  </select>
+                  <span class="category-name">{{ getCategoryNameById(atom.category) }}</span>
+                </div>
+                <div v-if="atom.synonyms?.length" class="atom-synonyms">
+                  <span class="synonyms-label">近义词:</span>
+                  <span class="synonyms-list">{{ atom.synonyms.join(', ') }}</span>
+                </div>
               </div>
             </div>
-            <div v-if="result.issues?.length" class="result-block warning">
-              <label>⚠️ 问题：</label>
-              <ul>
-                <li v-for="(issue, i) in result.issues" :key="i">{{ issue }}</li>
-              </ul>
+            
+            <!-- 优化结果 -->
+            <div v-else-if="result.optimized" class="text-result">
+              <div class="result-block">
+                <label>优化后：</label>
+                <div class="result-text">{{ result.optimized }}</div>
+              </div>
+              <div v-if="result.changes?.length" class="result-block">
+                <label>修改说明：</label>
+                <ul>
+                  <li v-for="(change, i) in result.changes" :key="i">{{ change }}</li>
+                </ul>
+              </div>
+              <button class="apply-btn" @click="applyToPreset">
+                <CheckIcon class="w-4 h-4" />
+                应用到当前预设
+              </button>
             </div>
-            <div v-if="result.suggestions?.length" class="result-block">
-              <label>💡 建议：</label>
-              <ul>
-                <li v-for="(s, i) in result.suggestions" :key="i">{{ s }}</li>
-              </ul>
+            
+            <!-- 翻译结果 -->
+            <div v-else-if="result.translation" class="text-result">
+              <div class="result-block">
+                <label>翻译结果：</label>
+                <div class="result-text">{{ result.translation }}</div>
+              </div>
+              <div v-if="result.keywords?.length" class="result-block">
+                <label>关键词：</label>
+                <div class="keyword-tags">
+                  <span v-for="kw in result.keywords" :key="kw" class="keyword-tag">{{ kw }}</span>
+                </div>
+              </div>
             </div>
+            
+            <!-- 分析结果 -->
+            <div v-else-if="result.analysis" class="text-result">
+              <div class="analysis-grid">
+                <div v-for="(value, key) in result.analysis" :key="key" class="analysis-item">
+                  <label>{{ getAnalysisLabel(key) }}：</label>
+                  <span>{{ value }}</span>
+                </div>
+              </div>
+              <div v-if="result.issues?.length" class="result-block warning">
+                <label>⚠️ 问题：</label>
+                <ul>
+                  <li v-for="(issue, i) in result.issues" :key="i">{{ issue }}</li>
+                </ul>
+              </div>
+              <div v-if="result.suggestions?.length" class="result-block">
+                <label>💡 建议：</label>
+                <ul>
+                  <li v-for="(s, i) in result.suggestions" :key="i">{{ s }}</li>
+                </ul>
+              </div>
+            </div>
+            
+            <!-- 通用结果 -->
+            <div v-else-if="result.text" class="text-result">
+              <pre>{{ result.text }}</pre>
+            </div>
+            
+            <!-- 原始JSON -->
+            <details class="raw-result">
+              <summary>查看原始响应</summary>
+              <pre>{{ JSON.stringify(result, null, 2) }}</pre>
+            </details>
           </div>
-          
-          <!-- 通用结果 -->
-          <div v-else-if="result.text" class="text-result">
-            <pre>{{ result.text }}</pre>
-          </div>
-          
-          <!-- 原始JSON -->
-          <details class="raw-result">
-            <summary>查看原始响应</summary>
-            <pre>{{ JSON.stringify(result, null, 2) }}</pre>
-          </details>
         </div>
       </div>
     </div>
@@ -479,7 +491,7 @@ function applyToPreset() {
 
 .modal-content {
   width: 100%;
-  max-width: 700px;
+  max-width: 1200px;
   max-height: 85vh;
   background-color: #0f172a;
   border: 1px solid #334155;
@@ -495,6 +507,7 @@ function applyToPreset() {
   justify-content: space-between;
   padding: 16px 20px;
   border-bottom: 1px solid #334155;
+  flex-shrink: 0;
 }
 
 .modal-header h3 {
@@ -550,13 +563,54 @@ function applyToPreset() {
   color: #e2e8f0;
 }
 
+/* 左右布局主体 */
 .modal-body {
   flex: 1;
-  overflow-y: auto;
+  display: flex;
+  overflow: hidden;
+  min-height: 0;
+}
+
+/* 左侧面板 */
+.left-panel {
+  width: 45%;
+  min-width: 380px;
+  max-width: 480px;
   padding: 20px;
   display: flex;
   flex-direction: column;
   gap: 16px;
+  overflow-y: auto;
+  border-right: 1px solid #334155;
+}
+
+/* 右侧面板 */
+.right-panel {
+  flex: 1;
+  padding: 20px;
+  overflow-y: auto;
+  background-color: #0b1120;
+}
+
+/* 空结果提示 */
+.empty-result {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #64748b;
+  gap: 12px;
+}
+
+.empty-result p {
+  font-size: 15px;
+  margin: 0;
+}
+
+.empty-result .empty-hint {
+  font-size: 13px;
+  color: #475569;
 }
 
 /* Selectors */
@@ -683,6 +737,7 @@ function applyToPreset() {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  flex: 1;
 }
 
 .input-section label {
@@ -693,14 +748,15 @@ function applyToPreset() {
 
 .input-section textarea {
   width: 100%;
+  flex: 1;
+  min-height: 120px;
   padding: 12px;
   background-color: #1e293b;
   border: 1px solid #334155;
   border-radius: 8px;
   color: #e2e8f0;
   font-size: 14px;
-  resize: vertical;
-  min-height: 100px;
+  resize: none;
 }
 
 .input-section textarea:focus {
@@ -747,6 +803,7 @@ function applyToPreset() {
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s;
+  margin-top: auto;
 }
 
 .explode-btn:hover:not(:disabled) {
@@ -776,14 +833,14 @@ function applyToPreset() {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  border-top: 1px solid #334155;
-  padding-top: 20px;
 }
 
 .result-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #334155;
 }
 
 .result-header span {
@@ -831,7 +888,7 @@ function applyToPreset() {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  max-height: 400px;
+  max-height: calc(85vh - 200px);
   overflow-y: auto;
 }
 
@@ -1111,5 +1168,28 @@ function applyToPreset() {
 
 .apply-btn:hover {
   background-color: #16a34a;
+}
+
+/* 响应式适配 */
+@media (max-width: 900px) {
+  .modal-content {
+    max-width: 95vw;
+  }
+  
+  .modal-body {
+    flex-direction: column;
+  }
+  
+  .left-panel {
+    width: 100%;
+    max-width: none;
+    max-height: 50vh;
+    border-right: none;
+    border-bottom: 1px solid #334155;
+  }
+  
+  .right-panel {
+    max-height: 35vh;
+  }
 }
 </style>

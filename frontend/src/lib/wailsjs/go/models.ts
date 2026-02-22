@@ -19,6 +19,8 @@ export namespace handlers {
 	export class AnalyzePromptRequest {
 	    prompt: string;
 	    config?: services.AIConfig;
+	    system_prompt?: string;
+	    user_prompt_template?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new AnalyzePromptRequest(source);
@@ -28,6 +30,8 @@ export namespace handlers {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.prompt = source["prompt"];
 	        this.config = this.convertValues(source["config"], services.AIConfig);
+	        this.system_prompt = source["system_prompt"];
+	        this.user_prompt_template = source["user_prompt_template"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -80,6 +84,32 @@ export namespace handlers {
 	        this.error = source["error"];
 	    }
 	}
+	export class BatchAddSynonymsRequest {
+	    atom_ids: number[];
+	    synonyms: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new BatchAddSynonymsRequest(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.atom_ids = source["atom_ids"];
+	        this.synonyms = source["synonyms"];
+	    }
+	}
+	export class BatchDeleteRequest {
+	    atom_ids: number[];
+	
+	    static createFrom(source: any = {}) {
+	        return new BatchDeleteRequest(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.atom_ids = source["atom_ids"];
+	    }
+	}
 	export class BatchImportAtomsRequest {
 	    json_data: string;
 	
@@ -90,6 +120,50 @@ export namespace handlers {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.json_data = source["json_data"];
+	    }
+	}
+	export class BatchMoveCategoryRequest {
+	    atom_ids: number[];
+	    category_id: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new BatchMoveCategoryRequest(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.atom_ids = source["atom_ids"];
+	        this.category_id = source["category_id"];
+	    }
+	}
+	export class BatchResponse {
+	    success: boolean;
+	    data?: any;
+	    error?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new BatchResponse(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.success = source["success"];
+	        this.data = source["data"];
+	        this.error = source["error"];
+	    }
+	}
+	export class BatchUpdateTypeRequest {
+	    atom_ids: number[];
+	    type: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new BatchUpdateTypeRequest(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.atom_ids = source["atom_ids"];
+	        this.type = source["type"];
 	    }
 	}
 	export class BuildPromptRequest {
@@ -223,6 +297,8 @@ export namespace handlers {
 	    categories?: string[];
 	    category_map?: Record<string, number>;
 	    config?: services.AIConfig;
+	    system_prompt?: string;
+	    user_prompt_template?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new ExplodePromptRequest(source);
@@ -234,6 +310,8 @@ export namespace handlers {
 	        this.categories = source["categories"];
 	        this.category_map = source["category_map"];
 	        this.config = this.convertValues(source["config"], services.AIConfig);
+	        this.system_prompt = source["system_prompt"];
+	        this.user_prompt_template = source["user_prompt_template"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -276,6 +354,8 @@ export namespace handlers {
 	    categories?: string[];
 	    category_map?: Record<string, number>;
 	    config?: services.AIConfig;
+	    system_prompt?: string;
+	    user_prompt_template?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new GenericAIRequest(source);
@@ -288,6 +368,8 @@ export namespace handlers {
 	        this.categories = source["categories"];
 	        this.category_map = source["category_map"];
 	        this.config = this.convertValues(source["config"], services.AIConfig);
+	        this.system_prompt = source["system_prompt"];
+	        this.user_prompt_template = source["user_prompt_template"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -433,6 +515,8 @@ export namespace handlers {
 	export class OptimizePromptRequest {
 	    prompt: string;
 	    config?: services.AIConfig;
+	    system_prompt?: string;
+	    user_prompt_template?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new OptimizePromptRequest(source);
@@ -442,6 +526,8 @@ export namespace handlers {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.prompt = source["prompt"];
 	        this.config = this.convertValues(source["config"], services.AIConfig);
+	        this.system_prompt = source["system_prompt"];
+	        this.user_prompt_template = source["user_prompt_template"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -627,6 +713,8 @@ export namespace handlers {
 	export class TranslatePromptRequest {
 	    prompt: string;
 	    config?: services.AIConfig;
+	    system_prompt?: string;
+	    user_prompt_template?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new TranslatePromptRequest(source);
@@ -636,6 +724,8 @@ export namespace handlers {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.prompt = source["prompt"];
 	        this.config = this.convertValues(source["config"], services.AIConfig);
+	        this.system_prompt = source["system_prompt"];
+	        this.user_prompt_template = source["user_prompt_template"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
