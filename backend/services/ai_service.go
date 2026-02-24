@@ -3,6 +3,7 @@ package services
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -278,18 +279,7 @@ func (s *AIService) ruleBasedExplosion(prompt string, categoryMap map[string]uin
 func (s *AIService) aiBasedExplosion(prompt string, categories []string, categoryMap map[string]uint, config *AIConfig, customSystemPrompt string, userPromptTemplate string) (*ExplodeResult, error) {
 	// 如果 categoryMap 为空，使用默认分类
 	if len(categoryMap) == 0 {
-		categoryMap = map[string]uint{
-			"质量": 1,
-			"人物": 2,
-			"姿势": 3,
-			"场景": 4,
-			"服装": 5,
-			"发型": 6,
-			"道具": 7,
-			"风格": 8,
-			"光照": 9,
-			"其他": 10,
-		}
+		return nil, errors.New("CategoryMap is empty")
 	}
 
 	// 构建分类列表（名称:ID格式）
@@ -311,7 +301,7 @@ func (s *AIService) aiBasedExplosion(prompt string, categories []string, categor
 	if systemPrompt == "" {
 		systemPrompt = DefaultExplodeSystemPrompt
 	}
-
+	systemPrompt = fmt.Sprintf(customSystemPrompt, categoryList)
 	// 渲染 systemPrompt 模板变量
 	systemPrompt = s.renderTemplate(systemPrompt, map[string]string{
 		"category_list":  categoryList,
