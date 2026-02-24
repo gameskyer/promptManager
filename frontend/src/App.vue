@@ -56,8 +56,8 @@ onMounted(async () => {
   // Initialize theme
   appStore.applyTheme(appStore.theme)
   
-  // Initialize AI config
-  aiStore.init()
+  // Initialize AI config (async)
+  await aiStore.init()
   
   // Initialize data
   await categoryStore.fetchCategories()

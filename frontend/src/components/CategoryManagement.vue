@@ -201,8 +201,9 @@ function confirmDeleteCategory(id) {
   if (category) deleteCategory(category)
 }
 
-async function moveCategory(categoryId, newParentId) {
+async function moveCategory(data) {
   try {
+    const { categoryId, newParentId } = data
     await categoryStore.moveCategory(categoryId, newParentId)
   } catch (error) {
     console.error('Failed to move category:', error)

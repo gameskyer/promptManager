@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"promptmaster/backend/logger"
+	"promptmaster/backend/models"
 
 	"gorm.io/gorm"
 )
@@ -830,19 +831,203 @@ func (s *AIService) ReverseImagePrompt(imagePath string) (*ExplodeResult, error)
 	}, nil
 }
 
-// SaveAIConfig saves AI configuration
+// SaveAIConfig saves AI provider configuration to database
 func (s *AIService) SaveAIConfig(config *AIConfig) error {
 	if config.Provider == "" {
 		return fmt.Errorf("provider is required")
 	}
-	return nil
+
+	var provider models.AIProviderConfig
+	result := s.db.Where("provider = ?", config.Provider).First(&provider)
+
+	if result.Error != nil {
+		// Create new provider
+		provider = models.AIProviderConfig{
+			Provider: config.Provider,
+			Type:     config.ProviderType,
+			BaseURL:  config.Endpoint,
+			APIKey:   config.APIKey,
+			Model:    config.Model,
+		}
+		return s.db.Create(&provider).Error
+	}
+
+	// Update existing provider
+	updates := map[string]interface{}{
+		"type":     config.ProviderType,
+		"base_url": config.Endpoint,
+		"api_key":  config.APIKey,
+		"model":    config.Model,
+	}
+	return s.db.Model(&provider).Updates(updates).Error
 }
 
-// GetAIConfig retrieves AI configuration
+// GetAIConfig retrieves current AI configuration from database
 func (s *AIService) GetAIConfig() (*AIConfig, error) {
+	// Get current settings
+	var settings models.AISettings
+	result := s.db.First(&settings)
+	if result.Error != nil {
+		// Return default if no settings
+		return &AIConfig{
+			Provider: "ollama",
+			Endpoint: "http://localhost:11434/v1",
+			Model:    "llama2",
+		}, nil
+	}
+
+	// Get current provider config
+	var provider models.AIProviderConfig
+	result = s.db.Where("provider = ?", settings.CurrentProvider).First(&provider)
+	if result.Error != nil {
+		// Return default if provider not found
+		return &AIConfig{
+			Provider: "ollama",
+			Endpoint: "http://localhost:11434/v1",
+			Model:    "llama2",
+		}, nil
+	}
+
 	return &AIConfig{
-		Provider: "ollama",
-		Endpoint: "http://localhost:11434/v1",
-		Model:    "llama2",
+		Provider:     provider.Provider,
+		ProviderType: provider.Type,
+		APIKey:       provider.APIKey,
+		Endpoint:     provider.BaseURL,
+		Model:        provider.Model,
 	}, nil
+}
+
+// GetAllProviders retrieves all AI provider configurations
+func (s *AIService) GetAllProviders() ([]models.AIProviderConfig, error) {
+	var providers []models.AIProviderConfig
+	result := s.db.Order("sort_order ASC").Find(&providers)
+	return providers, result.Error
+}
+
+// SaveProvider saves or updates an AI provider configuration
+func (s *AIService) SaveProvider(provider *models.AIProviderConfig) error {
+	if provider.Provider == "" {
+		return fmt.Errorf("provider id is required")
+	}
+
+	var existing models.AIProviderConfig
+	result := s.db.Where("provider = ?", provider.Provider).First(&existing)
+
+	if result.Error != nil {
+		// Create new
+		return s.db.Create(provider).Error
+	}
+
+	// Update
+	return s.db.Model(&existing).Updates(map[string]interface{}{
+		"name":       provider.Name,
+		"type":       provider.Type,
+		"base_url":   provider.BaseURL,
+		"api_key":    provider.APIKey,
+		"model":      provider.Model,
+		"models":     provider.Models,
+		"headers":    provider.Headers,
+		"enabled":    provider.Enabled,
+		"is_custom":  provider.IsCustom,
+		"sort_order": provider.SortOrder,
+	}).Error
+}
+
+// DeleteProvider deletes an AI provider configuration
+func (s *AIService) DeleteProvider(providerID string) error {
+	return s.db.Where("provider = ? AND is_default = ?", providerID, false).Delete(&models.AIProviderConfig{}).Error
+}
+
+// SetCurrentProvider sets the current active provider
+func (s *AIService) SetCurrentProvider(providerID string) error {
+	var settings models.AISettings
+	result := s.db.First(&settings)
+
+	if result.Error != nil {
+		// Create new settings
+		return s.db.Create(&models.AISettings{
+			CurrentProvider: providerID,
+		}).Error
+	}
+
+	// Update
+	return s.db.Model(&settings).Update("current_provider", providerID).Error
+}
+
+// GetAllPromptTemplates retrieves all AI prompt templates
+func (s *AIService) GetAllPromptTemplates() ([]models.AIPromptTemplate, error) {
+	var templates []models.AIPromptTemplate
+	result := s.db.Order("template_id ASC").Find(&templates)
+	return templates, result.Error
+}
+
+// GetPromptTemplate retrieves a prompt template by ID
+func (s *AIService) GetPromptTemplate(templateID string) (*models.AIPromptTemplate, error) {
+	var template models.AIPromptTemplate
+	result := s.db.Where("template_id = ?", templateID).First(&template)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	return &template, nil
+}
+
+// SavePromptTemplate saves or updates a prompt template
+func (s *AIService) SavePromptTemplate(template *models.AIPromptTemplate) error {
+	if template.TemplateID == "" {
+		return fmt.Errorf("template id is required")
+	}
+
+	var existing models.AIPromptTemplate
+	result := s.db.Where("template_id = ?", template.TemplateID).First(&existing)
+
+	if result.Error != nil {
+		// Create new
+		return s.db.Create(template).Error
+	}
+
+	// Update
+	return s.db.Model(&existing).Updates(map[string]interface{}{
+		"name":                 template.Name,
+		"description":          template.Description,
+		"system_prompt":        template.SystemPrompt,
+		"user_prompt_template": template.UserPromptTemplate,
+		"temperature":          template.Temperature,
+		"response_format":      template.ResponseFormat,
+		"is_custom":            template.IsCustom,
+	}).Error
+}
+
+// DeletePromptTemplate deletes a prompt template
+func (s *AIService) DeletePromptTemplate(templateID string) error {
+	return s.db.Where("template_id = ? AND is_default = ?", templateID, false).Delete(&models.AIPromptTemplate{}).Error
+}
+
+// SetCurrentPrompt sets the current active prompt template
+func (s *AIService) SetCurrentPrompt(templateID string) error {
+	var settings models.AISettings
+	result := s.db.First(&settings)
+
+	if result.Error != nil {
+		// Create new settings
+		return s.db.Create(&models.AISettings{
+			CurrentPrompt: templateID,
+		}).Error
+	}
+
+	// Update
+	return s.db.Model(&settings).Update("current_prompt", templateID).Error
+}
+
+// GetCurrentSettings retrieves current AI settings
+func (s *AIService) GetCurrentSettings() (*models.AISettings, error) {
+	var settings models.AISettings
+	result := s.db.First(&settings)
+	if result.Error != nil {
+		// Return default
+		return &models.AISettings{
+			CurrentProvider: "ollama",
+			CurrentPrompt:   "explode",
+		}, nil
+	}
+	return &settings, nil
 }

@@ -6,12 +6,36 @@ export function AnalyzePrompt(arg1) {
   return window['go']['handlers']['AIHandler']['AnalyzePrompt'](arg1);
 }
 
+export function DeletePromptTemplate(arg1) {
+  return window['go']['handlers']['AIHandler']['DeletePromptTemplate'](arg1);
+}
+
+export function DeleteProvider(arg1) {
+  return window['go']['handlers']['AIHandler']['DeleteProvider'](arg1);
+}
+
 export function ExplodePrompt(arg1) {
   return window['go']['handlers']['AIHandler']['ExplodePrompt'](arg1);
 }
 
 export function GetAIConfig() {
   return window['go']['handlers']['AIHandler']['GetAIConfig']();
+}
+
+export function GetAllPromptTemplates() {
+  return window['go']['handlers']['AIHandler']['GetAllPromptTemplates']();
+}
+
+export function GetAllProviders() {
+  return window['go']['handlers']['AIHandler']['GetAllProviders']();
+}
+
+export function GetCurrentSettings() {
+  return window['go']['handlers']['AIHandler']['GetCurrentSettings']();
+}
+
+export function GetPromptTemplate(arg1) {
+  return window['go']['handlers']['AIHandler']['GetPromptTemplate'](arg1);
 }
 
 export function ImportExtractedAtoms(arg1) {
@@ -32,6 +56,22 @@ export function ReverseImagePrompt(arg1) {
 
 export function SaveAIConfig(arg1) {
   return window['go']['handlers']['AIHandler']['SaveAIConfig'](arg1);
+}
+
+export function SavePromptTemplate(arg1) {
+  return window['go']['handlers']['AIHandler']['SavePromptTemplate'](arg1);
+}
+
+export function SaveProvider(arg1) {
+  return window['go']['handlers']['AIHandler']['SaveProvider'](arg1);
+}
+
+export function SetCurrentPrompt(arg1) {
+  return window['go']['handlers']['AIHandler']['SetCurrentPrompt'](arg1);
+}
+
+export function SetCurrentProvider(arg1) {
+  return window['go']['handlers']['AIHandler']['SetCurrentProvider'](arg1);
 }
 
 export function TranslatePrompt(arg1) {

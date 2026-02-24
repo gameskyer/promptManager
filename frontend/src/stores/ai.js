@@ -10,6 +10,15 @@ import {
   SaveAIConfig,
   GetAIConfig,
   ProcessAI,
+  GetAllProviders,
+  SaveProvider,
+  DeleteProvider,
+  SetCurrentProvider,
+  GetAllPromptTemplates,
+  SavePromptTemplate,
+  DeletePromptTemplate,
+  SetCurrentPrompt,
+  GetCurrentSettings,
 } from '../lib/wailsjs/go/handlers/AIHandler'
 
 // 默认AI提供商配置模板
@@ -454,38 +463,151 @@ export const useAIStore = defineStore('ai', () => {
 
   // ========== Actions ==========
   
-  // 初始化 - 从localStorage加载并合并默认配置
-  function init() {
-    loadFromStorage()
-    
-    // 合并默认提供商（添加缺失的）
-    const defaultProviders = JSON.parse(JSON.stringify(DEFAULT_PROVIDERS))
-    const existingIds = new Set(providers.value.map(p => p.id))
-    
-    for (const defaultProvider of defaultProviders) {
-      if (!existingIds.has(defaultProvider.id)) {
-        providers.value.push(defaultProvider)
+  // 初始化 - 从后端数据库加载配置
+  async function init() {
+    try {
+      // 先从后端加载配置
+      await loadFromBackend()
+    } catch (error) {
+      console.error('从后端加载AI配置失败，降级到localStorage:', error)
+      // 降级到localStorage
+      loadFromStorage()
+    }
+  }
+  
+  // 从后端数据库加载配置
+  async function loadFromBackend() {
+    try {
+      // 加载提供商列表
+      const providersResponse = await GetAllProviders()
+      if (providersResponse.success && providersResponse.data) {
+        const dbProviders = providersResponse.data.map(p => ({
+          id: p.provider,
+          name: p.name,
+          type: p.type,
+          baseUrl: p.base_url,
+          apiKey: p.api_key,
+          model: p.model,
+          models: p.models || [],
+          headers: p.headers || {},
+          enabled: p.enabled,
+          isCustom: p.is_custom,
+        }))
+        providers.value = dbProviders
       }
-    }
-    
-    // 合并默认Prompt模板（添加缺失的）
-    const defaultPrompts = JSON.parse(JSON.stringify(DEFAULT_PROMPTS))
-    if (!prompts.value) prompts.value = {}
-    
-    for (const [id, defaultPrompt] of Object.entries(defaultPrompts)) {
-      if (!prompts.value[id]) {
-        prompts.value[id] = defaultPrompt
+      
+      // 加载提示词模板
+      const promptsResponse = await GetAllPromptTemplates()
+      if (promptsResponse.success && promptsResponse.data) {
+        const dbPrompts = {}
+        promptsResponse.data.forEach(p => {
+          dbPrompts[p.template_id] = {
+            id: p.template_id,
+            name: p.name,
+            description: p.description,
+            systemPrompt: p.system_prompt,
+            userPromptTemplate: p.user_prompt_template,
+            temperature: p.temperature,
+            responseFormat: p.response_format,
+            isCustom: p.is_custom,
+          }
+        })
+        prompts.value = dbPrompts
       }
+      
+      // 加载当前设置
+      const settingsResponse = await GetCurrentSettings()
+      if (settingsResponse.success && settingsResponse.data) {
+        currentProviderId.value = settingsResponse.data.current_provider || ''
+        currentPromptId.value = settingsResponse.data.current_prompt || 'explode'
+      }
+      
+      // 如果没有提供商，使用默认值并保存到后端
+      if (providers.value.length === 0) {
+        await resetToDefaultsBackend()
+      }
+      
+      // 如果没有提示词模板，使用默认值
+      if (Object.keys(prompts.value).length === 0) {
+        prompts.value = JSON.parse(JSON.stringify(DEFAULT_PROMPTS))
+        // 保存到后端
+        for (const [id, prompt] of Object.entries(prompts.value)) {
+          await savePromptToBackend(prompt)
+        }
+      }
+      
+      // 默认选中第一个启用的提供商
+      if (!currentProviderId.value) {
+        const enabled = enabledProviders.value
+        currentProviderId.value = enabled.length > 0 ? enabled[0].id : providers.value[0]?.id || ''
+      }
+      
+      // 同时保存到localStorage作为缓存
+      saveToStorage()
+    } catch (error) {
+      console.error('加载后端配置失败:', error)
+      throw error
+    }
+  }
+  
+  // 保存提供商到后端
+  async function saveProviderToBackend(provider) {
+    try {
+      const response = await SaveProvider({
+        provider: {
+          provider: provider.id,
+          name: provider.name,
+          type: provider.type,
+          base_url: provider.baseUrl,
+          api_key: provider.apiKey,
+          model: provider.model,
+          models: provider.models,
+          headers: provider.headers,
+          enabled: provider.enabled,
+          is_custom: provider.isCustom,
+          sort_order: 0,
+        }
+      })
+      return response.success
+    } catch (error) {
+      console.error('保存提供商到后端失败:', error)
+      return false
+    }
+  }
+  
+  // 保存提示词到后端
+  async function savePromptToBackend(prompt) {
+    try {
+      const response = await SavePromptTemplate({
+        template: {
+          template_id: prompt.id,
+          name: prompt.name,
+          description: prompt.description,
+          system_prompt: prompt.systemPrompt,
+          user_prompt_template: prompt.userPromptTemplate,
+          temperature: prompt.temperature,
+          response_format: prompt.responseFormat,
+          is_custom: prompt.isCustom || false,
+        }
+      })
+      return response.success
+    } catch (error) {
+      console.error('保存提示词到后端失败:', error)
+      return false
+    }
+  }
+  
+  // 重置为默认值并保存到后端
+  async function resetToDefaultsBackend() {
+    providers.value = JSON.parse(JSON.stringify(DEFAULT_PROVIDERS))
+    
+    // 保存到后端
+    for (const provider of providers.value) {
+      await saveProviderToBackend(provider)
     }
     
-    // 默认选中第一个启用的提供商
-    if (!currentProviderId.value) {
-      const enabled = enabledProviders.value
-      currentProviderId.value = enabled.length > 0 ? enabled[0].id : providers.value[0]?.id || ''
-    }
-    
-    // 保存合并后的配置
-    saveToStorage()
+    currentProviderId.value = 'ollama'
+    await SetCurrentProvider({ provider_id: 'ollama' })
   }
   
   // 从localStorage加载
@@ -525,9 +647,15 @@ export const useAIStore = defineStore('ai', () => {
   }
   
   // 设置当前提供商
-  function setCurrentProvider(providerId) {
+  async function setCurrentProvider(providerId) {
     currentProviderId.value = providerId
     saveToStorage()
+    // 同时保存到后端
+    try {
+      await SetCurrentProvider({ provider_id: providerId })
+    } catch (error) {
+      console.error('保存当前提供商到后端失败:', error)
+    }
   }
 
   // 获取 Ollama 本地模型列表
@@ -637,13 +765,19 @@ export const useAIStore = defineStore('ai', () => {
   }
   
   // 设置当前Prompt
-  function setCurrentPrompt(promptId) {
+  async function setCurrentPrompt(promptId) {
     currentPromptId.value = promptId
     saveToStorage()
+    // 同时保存到后端
+    try {
+      await SetCurrentPrompt({ template_id: promptId })
+    } catch (error) {
+      console.error('保存当前提示词到后端失败:', error)
+    }
   }
   
   // 添加自定义提供商
-  function addProvider(provider) {
+  async function addProvider(provider) {
     const newProvider = {
       id: `custom_${Date.now()}`,
       name: provider.name,
@@ -658,31 +792,41 @@ export const useAIStore = defineStore('ai', () => {
     }
     providers.value.push(newProvider)
     saveToStorage()
+    // 同时保存到后端
+    await saveProviderToBackend(newProvider)
     return newProvider.id
   }
   
   // 更新提供商
-  function updateProvider(providerId, updates) {
+  async function updateProvider(providerId, updates) {
     const index = providers.value.findIndex(p => p.id === providerId)
     if (index !== -1) {
       providers.value[index] = { ...providers.value[index], ...updates }
       saveToStorage()
+      // 同时保存到后端
+      await saveProviderToBackend(providers.value[index])
     }
   }
   
   // 删除提供商
-  function removeProvider(providerId) {
+  async function removeProvider(providerId) {
     providers.value = providers.value.filter(p => p.id !== providerId)
     if (currentProviderId.value === providerId) {
       currentProviderId.value = providers.value[0]?.id || ''
     }
     saveToStorage()
+    // 同时从后端删除
+    try {
+      await DeleteProvider(providerId)
+    } catch (error) {
+      console.error('从后端删除提供商失败:', error)
+    }
   }
   
   // 添加自定义Prompt模板
-  function addPrompt(prompt) {
+  async function addPrompt(prompt) {
     const id = `custom_${Date.now()}`
-    prompts.value[id] = {
+    const newPrompt = {
       id,
       name: prompt.name,
       description: prompt.description,
@@ -692,34 +836,47 @@ export const useAIStore = defineStore('ai', () => {
       responseFormat: prompt.responseFormat || 'json',
       isCustom: true,
     }
+    prompts.value[id] = newPrompt
     saveToStorage()
+    // 同时保存到后端
+    await savePromptToBackend(newPrompt)
     return id
   }
   
   // 更新Prompt
-  function updatePrompt(promptId, updates) {
+  async function updatePrompt(promptId, updates) {
     if (prompts.value[promptId]) {
       prompts.value[promptId] = { ...prompts.value[promptId], ...updates }
       saveToStorage()
+      // 同时保存到后端
+      await savePromptToBackend(prompts.value[promptId])
     }
   }
   
   // 删除Prompt
-  function removePrompt(promptId) {
+  async function removePrompt(promptId) {
     delete prompts.value[promptId]
     if (currentPromptId.value === promptId) {
       currentPromptId.value = 'explode'
     }
     saveToStorage()
+    // 同时从后端删除
+    try {
+      await DeletePromptTemplate(promptId)
+    } catch (error) {
+      console.error('从后端删除提示词失败:', error)
+    }
   }
   
   // 重置为默认配置
-  function resetToDefaults() {
+  async function resetToDefaults() {
     providers.value = JSON.parse(JSON.stringify(DEFAULT_PROVIDERS))
     prompts.value = JSON.parse(JSON.stringify(DEFAULT_PROMPTS))
     currentProviderId.value = providers.value[0]?.id || ''
     currentPromptId.value = 'explode'
     saveToStorage()
+    // 同时保存到后端
+    await resetToDefaultsBackend()
   }
 
   // 构建 AI 配置对象

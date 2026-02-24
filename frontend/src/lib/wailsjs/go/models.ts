@@ -564,6 +564,62 @@ export namespace handlers {
 	        this.error = source["error"];
 	    }
 	}
+	export class PromptTemplateDTO {
+	    template_id: string;
+	    name: string;
+	    description: string;
+	    system_prompt: string;
+	    user_prompt_template: string;
+	    temperature: number;
+	    response_format: string;
+	    is_custom: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new PromptTemplateDTO(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.template_id = source["template_id"];
+	        this.name = source["name"];
+	        this.description = source["description"];
+	        this.system_prompt = source["system_prompt"];
+	        this.user_prompt_template = source["user_prompt_template"];
+	        this.temperature = source["temperature"];
+	        this.response_format = source["response_format"];
+	        this.is_custom = source["is_custom"];
+	    }
+	}
+	export class ProviderConfigDTO {
+	    provider: string;
+	    name: string;
+	    type: string;
+	    base_url: string;
+	    api_key: string;
+	    model: string;
+	    models: string[];
+	    headers: Record<string, any>;
+	    enabled: boolean;
+	    is_custom: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new ProviderConfigDTO(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.provider = source["provider"];
+	        this.name = source["name"];
+	        this.type = source["type"];
+	        this.base_url = source["base_url"];
+	        this.api_key = source["api_key"];
+	        this.model = source["model"];
+	        this.models = source["models"];
+	        this.headers = source["headers"];
+	        this.enabled = source["enabled"];
+	        this.is_custom = source["is_custom"];
+	    }
+	}
 	export class ReorderCategoriesRequest {
 	    ids: number[];
 	
@@ -598,6 +654,66 @@ export namespace handlers {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.config = this.convertValues(source["config"], services.AIConfig);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class SavePromptTemplateRequest {
+	    template: PromptTemplateDTO;
+	
+	    static createFrom(source: any = {}) {
+	        return new SavePromptTemplateRequest(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.template = this.convertValues(source["template"], PromptTemplateDTO);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class SaveProviderRequest {
+	    provider: ProviderConfigDTO;
+	
+	    static createFrom(source: any = {}) {
+	        return new SaveProviderRequest(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.provider = this.convertValues(source["provider"], ProviderConfigDTO);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -694,6 +810,30 @@ export namespace handlers {
 	        this.success = source["success"];
 	        this.data = source["data"];
 	        this.error = source["error"];
+	    }
+	}
+	export class SetCurrentPromptRequest {
+	    template_id: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new SetCurrentPromptRequest(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.template_id = source["template_id"];
+	    }
+	}
+	export class SetCurrentProviderRequest {
+	    provider_id: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new SetCurrentProviderRequest(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.provider_id = source["provider_id"];
 	    }
 	}
 	export class StarVersionRequest {

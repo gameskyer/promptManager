@@ -77,11 +77,24 @@
 
     <!-- Filter Bar -->
     <div class="filter-bar">
-      <div class="filter-group">
-        <label>分类</label>
-        <select v-model="filterCategory" @change="handleFilterChange">
+      <div class="filter-group category-filter">
+        <label>一级分类</label>
+        <select v-model="filterRootCategory" @change="handleRootCategoryChange">
           <option value="">全部分类</option>
-          <option v-for="cat in categoryStore.atomCategories" :key="cat.id" :value="cat.id">
+          <option v-for="cat in rootAtomCategories" :key="cat.id" :value="cat.id">
+            {{ cat.name }}
+          </option>
+        </select>
+      </div>
+      <div class="filter-group category-filter">
+        <label>二级分类</label>
+        <select 
+          v-model="filterCategory" 
+          @change="handleFilterChange"
+          :disabled="!filterRootCategory"
+        >
+          <option value="">{{ filterRootCategory ? '全部子分类' : '请先选择一级分类' }}</option>
+          <option v-for="cat in childCategories" :key="cat.id" :value="cat.id">
             {{ cat.name }}
           </option>
         </select>
@@ -238,15 +251,30 @@
         </div>
         <div class="batch-dialog-body">
           <p class="batch-desc">将选中的 {{ selectedCount }} 个原子词移动到：</p>
-          <select v-model="batchTargetCategory" class="batch-select">
-            <option v-for="cat in categoryStore.atomCategories" :key="cat.id" :value="cat.id">
-              {{ cat.name }}
-            </option>
-          </select>
+          <div class="batch-cascade-select">
+            <div class="cascade-level">
+              <label>一级分类</label>
+              <select v-model="batchRootCategory" @change="batchTargetCategory = ''" class="batch-select">
+                <option value="">请选择</option>
+                <option v-for="cat in rootAtomCategories" :key="cat.id" :value="cat.id">
+                  {{ cat.name }}
+                </option>
+              </select>
+            </div>
+            <div class="cascade-level">
+              <label>二级分类</label>
+              <select v-model="batchTargetCategory" class="batch-select" :disabled="!batchRootCategory">
+                <option value="">{{ batchRootCategory ? '请选择（留空则移到一级分类）' : '请先选择一级分类' }}</option>
+                <option v-for="cat in batchChildCategories" :key="cat.id" :value="cat.id">
+                  {{ cat.name }}
+                </option>
+              </select>
+            </div>
+          </div>
         </div>
         <div class="batch-dialog-footer">
           <button class="btn-secondary" @click="showBatchMove = false">取消</button>
-          <button class="btn-primary" :disabled="!batchTargetCategory" @click="executeBatchMove">
+          <button class="btn-primary" :disabled="!batchRootCategory && !batchTargetCategory" @click="executeBatchMove">
             确认移动
           </button>
         </div>
@@ -373,10 +401,11 @@ const atomStore = useAtomStore()
 const categoryStore = useCategoryStore()
 
 const { atoms } = storeToRefs(atomStore)
-const { categories } = storeToRefs(categoryStore)
+const { categories, categoryTree } = storeToRefs(categoryStore)
 const { selectedAtoms, isBatchMode } = storeToRefs(atomStore)
 
 // Filter state
+const filterRootCategory = ref('')
 const filterCategory = ref('')
 const filterType = ref('')
 const searchKeyword = ref('')
@@ -396,17 +425,41 @@ const showBatchMove = ref(false)
 const showBatchType = ref(false)
 const showBatchSynonyms = ref(false)
 const showBatchDeleteConfirm = ref(false)
+const batchRootCategory = ref('')
 const batchTargetCategory = ref('')
 const batchTargetType = ref('')
 const batchSynonymsInput = ref('')
 
+// Computed for batch move dialog
+const batchChildCategories = computed(() => {
+  if (!batchRootCategory.value) return []
+  const rootCat = rootAtomCategories.value.find(c => c.id === batchRootCategory.value)
+  return rootCat?.children || []
+})
+
 // Computed
+const rootAtomCategories = computed(() => 
+  categoryTree.value.filter(c => c.type === 'ATOM' && (c.parent_id === 0 || c.parent_id === null))
+)
+
+const childCategories = computed(() => {
+  if (!filterRootCategory.value) return []
+  const rootCat = rootAtomCategories.value.find(c => c.id === filterRootCategory.value)
+  return rootCat?.children || []
+})
+
 const filteredAtoms = computed(() => {
   let result = [...atoms.value]
 
   // Category filter
   if (filterCategory.value) {
+    // 二级分类筛选
     result = result.filter(a => a.category_id === filterCategory.value)
+  } else if (filterRootCategory.value) {
+    // 一级分类筛选 - 包含该分类下所有子分类的原子词
+    const childIds = childCategories.value.map(c => c.id)
+    childIds.push(filterRootCategory.value) // 也包含直接属于一级分类的原子词
+    result = result.filter(a => childIds.includes(a.category_id))
   }
 
   // Type filter
@@ -434,6 +487,10 @@ const totalPages = computed(() => {
 
   if (filterCategory.value) {
     count = atoms.value.filter(a => a.category_id === filterCategory.value).length
+  } else if (filterRootCategory.value) {
+    const childIds = childCategories.value.map(c => c.id)
+    childIds.push(filterRootCategory.value)
+    count = atoms.value.filter(a => childIds.includes(a.category_id)).length
   }
   if (filterType.value) {
     count = atoms.value.filter(a => a.type === filterType.value).length
@@ -460,6 +517,12 @@ const isAllSelected = computed(() => {
 const isSelected = (id) => selectedAtoms.value.includes(id)
 
 // Methods
+function handleRootCategoryChange() {
+  // 当一级分类变化时，清除二级分类选择
+  filterCategory.value = ''
+  currentPage.value = 1
+}
+
 function toggleBatchMode() {
   atomStore.setBatchMode(!isBatchMode.value)
 }
@@ -482,8 +545,20 @@ function toggleSelectAll() {
 }
 
 function getCategoryName(categoryId) {
-  const cat = categories.value.find(c => c.id === categoryId)
-  return cat?.name || '-'
+  // 查找分类，包括子分类
+  for (const root of categoryTree.value) {
+    if (root.id === categoryId) {
+      return root.name
+    }
+    if (root.children) {
+      for (const child of root.children) {
+        if (child.id === categoryId) {
+          return `${root.name} > ${child.name}`
+        }
+      }
+    }
+  }
+  return '-'
 }
 
 function handleFilterChange() {
@@ -590,10 +665,14 @@ function confirmBatchDelete() {
 }
 
 async function executeBatchMove() {
-  if (!batchTargetCategory.value) return
+  // 如果没有选择二级分类，但有选择一级分类，则移动到一级分类
+  const targetCategoryId = batchTargetCategory.value || batchRootCategory.value
+  if (!targetCategoryId) return
+  
   try {
-    const count = await atomStore.batchMoveCategory(batchTargetCategory.value)
+    const count = await atomStore.batchMoveCategory(targetCategoryId)
     showBatchMove.value = false
+    batchRootCategory.value = ''
     batchTargetCategory.value = ''
     alert(`成功移动 ${count} 个原子词`)
   } catch (error) {
@@ -646,6 +725,11 @@ onMounted(async () => {
 
 // Reset page when filters change
 watch([filterCategory, filterType, searchKeyword], () => {
+  currentPage.value = 1
+})
+
+// Watch for root category changes to reset filter
+watch(filterRootCategory, () => {
   currentPage.value = 1
 })
 </script>
@@ -860,6 +944,12 @@ watch([filterCategory, filterType, searchKeyword], () => {
 .filter-group.search {
   flex: 1;
   max-width: 300px;
+}
+
+.filter-group.category-filter select:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background-color: #0f172a;
 }
 
 .search-input {
@@ -1231,6 +1321,23 @@ watch([filterCategory, filterType, searchKeyword], () => {
   font-size: 12px;
   color: #64748b;
   margin-top: 8px;
+}
+
+.batch-cascade-select {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.cascade-level {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cascade-level label {
+  font-size: 12px;
+  color: #94a3b8;
 }
 
 .batch-type-options {

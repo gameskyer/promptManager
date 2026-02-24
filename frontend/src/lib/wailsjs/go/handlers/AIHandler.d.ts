@@ -4,9 +4,21 @@ import {handlers} from '../models';
 
 export function AnalyzePrompt(arg1:handlers.AnalyzePromptRequest):Promise<handlers.AIResponse>;
 
+export function DeletePromptTemplate(arg1:string):Promise<handlers.AIResponse>;
+
+export function DeleteProvider(arg1:string):Promise<handlers.AIResponse>;
+
 export function ExplodePrompt(arg1:handlers.ExplodePromptRequest):Promise<handlers.AIResponse>;
 
 export function GetAIConfig():Promise<handlers.AIResponse>;
+
+export function GetAllPromptTemplates():Promise<handlers.AIResponse>;
+
+export function GetAllProviders():Promise<handlers.AIResponse>;
+
+export function GetCurrentSettings():Promise<handlers.AIResponse>;
+
+export function GetPromptTemplate(arg1:string):Promise<handlers.AIResponse>;
 
 export function ImportExtractedAtoms(arg1:handlers.ImportExtractedRequest):Promise<handlers.AIResponse>;
 
@@ -17,5 +29,13 @@ export function ProcessAI(arg1:handlers.GenericAIRequest):Promise<handlers.AIRes
 export function ReverseImagePrompt(arg1:handlers.ReverseImagePromptRequest):Promise<handlers.AIResponse>;
 
 export function SaveAIConfig(arg1:handlers.SaveAIConfigRequest):Promise<handlers.AIResponse>;
+
+export function SavePromptTemplate(arg1:handlers.SavePromptTemplateRequest):Promise<handlers.AIResponse>;
+
+export function SaveProvider(arg1:handlers.SaveProviderRequest):Promise<handlers.AIResponse>;
+
+export function SetCurrentPrompt(arg1:handlers.SetCurrentPromptRequest):Promise<handlers.AIResponse>;
+
+export function SetCurrentProvider(arg1:handlers.SetCurrentProviderRequest):Promise<handlers.AIResponse>;
 
 export function TranslatePrompt(arg1:handlers.TranslatePromptRequest):Promise<handlers.AIResponse>;
