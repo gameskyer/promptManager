@@ -78,26 +78,52 @@ func (s *AtomService) UpdateAtom(id uint, updates map[string]interface{}) (*mode
 		return nil, err
 	}
 	
-	// 过滤允许的字段
-	allowedFields := map[string]bool{
-		"value":       true,
-		"label":       true,
-		"type":        true,
-		"category_id": true,
-		"synonyms":    true,
+	// 使用结构体更新，避免 map 导致的类型问题
+	updateFields := map[string]interface{}{
+		"updated_at": time.Now(),
 	}
 	
-	filteredUpdates := make(map[string]interface{})
-	for key, value := range updates {
-		if allowedFields[key] {
-			filteredUpdates[key] = value
+	// 逐个字段处理，确保类型正确
+	if value, ok := updates["value"].(string); ok && value != "" {
+		updateFields["value"] = value
+	}
+	if label, ok := updates["label"].(string); ok && label != "" {
+		updateFields["label"] = label
+	}
+	if typeVal, ok := updates["type"].(string); ok && typeVal != "" {
+		updateFields["type"] = typeVal
+	}
+	if catID, ok := updates["category_id"]; ok {
+		// 处理可能的 float64 或 int 类型
+		switch v := catID.(type) {
+		case float64:
+			updateFields["category_id"] = uint(v)
+		case int:
+			updateFields["category_id"] = uint(v)
+		case int64:
+			updateFields["category_id"] = uint(v)
+		case uint:
+			updateFields["category_id"] = v
 		}
 	}
 	
-	// 确保有更新时间
-	filteredUpdates["updated_at"] = time.Now()
+	// 单独处理 synonyms - 需要转换为 StringSlice
+	if synonymsVal, ok := updates["synonyms"]; ok {
+		switch v := synonymsVal.(type) {
+		case []string:
+			updateFields["synonyms"] = models.StringSlice(v)
+		case []interface{}:
+			var synonyms []string
+			for _, item := range v {
+				if s, ok := item.(string); ok {
+					synonyms = append(synonyms, s)
+				}
+			}
+			updateFields["synonyms"] = models.StringSlice(synonyms)
+		}
+	}
 	
-	if err := s.db.Model(&atom).Updates(filteredUpdates).Error; err != nil {
+	if err := s.db.Model(&atom).Updates(updateFields).Error; err != nil {
 		return nil, err
 	}
 	
