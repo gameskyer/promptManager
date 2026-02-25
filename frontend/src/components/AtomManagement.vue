@@ -591,18 +591,19 @@ function closeAtomDialog() {
 
 async function saveAtom(data) {
   try {
+    // 确保 category_id 是数字类型
     const updateData = {
       value: data.value,
       label: data.label,
       type: data.type,
-      category_id: data.category_id,
+      category_id: Number(data.category_id) || 0,
       synonyms: data.synonyms || [],
     }
     
     if (data.id) {
       await atomStore.updateAtom(data.id, updateData)
     } else {
-      await atomStore.createAtom(data)
+      await atomStore.createAtom(updateData)
     }
     closeAtomDialog()
     await atomStore.fetchAtoms()
