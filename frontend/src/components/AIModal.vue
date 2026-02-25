@@ -178,11 +178,32 @@
                 </div>
                 <div class="atom-category-row">
                   <label>分类:</label>
-                  <select v-model="atom.category" class="category-select">
-                    <option v-for="cat in availableCategories" :key="cat.id" :value="cat.id">
-                      {{ cat.name }}
-                    </option>
-                  </select>
+                  <!-- 可搜索的分类选择器 -->
+                  <div class="searchable-select">
+                    <input
+                      v-model="atom.categorySearch"
+                      type="text"
+                      class="category-search-input"
+                      placeholder="输入分类名称搜索..."
+                      @focus="atom.showCategoryDropdown = true"
+                      @input="filterCategories(atom)"
+                    />
+                    <div v-if="atom.showCategoryDropdown" class="category-dropdown">
+                      <div
+                        v-for="cat in getFilteredCategories(atom)"
+                        :key="cat.id"
+                        class="category-option"
+                        :class="{ 'is-selected': atom.category === cat.id }"
+                        @click="selectCategory(atom, cat.id)"
+                      >
+                        <span class="cat-name">{{ cat.name }}</span>
+                        <span v-if="cat.parent_name" class="cat-parent">{{ cat.parent_name }}</span>
+                      </div>
+                      <div v-if="getFilteredCategories(atom).length === 0" class="no-category">
+                        无匹配分类
+                      </div>
+                    </div>
+                  </div>
                   <span class="category-name">{{ getCategoryNameById(atom.category) }}</span>
                 </div>
                 <div v-if="atom.synonyms?.length" class="atom-synonyms">
@@ -264,7 +285,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import {
   BoltIcon,
@@ -308,6 +329,69 @@ const categoryMap = computed(() => {
 function getCategoryNameById(categoryId) {
   const category = availableCategories.value.find(c => c.id === categoryId)
   return category?.name || '未分类'
+}
+
+// ========== 可搜索分类选择器相关方法 ==========
+
+// 获取带父分类名称的分类列表
+const categoriesWithParent = computed(() => {
+  return availableCategories.value.map(cat => {
+    const parent = categoryStore.categories.find(c => c.id === cat.parent_id)
+    return {
+      ...cat,
+      parent_name: parent?.name || ''
+    }
+  })
+})
+
+// 筛选分类（根据搜索关键词）
+function getFilteredCategories(atom) {
+  const searchTerm = (atom.categorySearch || '').toLowerCase().trim()
+  if (!searchTerm) {
+    return categoriesWithParent.value
+  }
+  return categoriesWithParent.value.filter(cat => 
+    cat.name.toLowerCase().includes(searchTerm)
+  )
+}
+
+// 选择分类
+function selectCategory(atom, categoryId) {
+  atom.category = categoryId
+  atom.showCategoryDropdown = false
+  // 设置搜索框显示为选中的分类名
+  const cat = categoriesWithParent.value.find(c => c.id === categoryId)
+  if (cat) {
+    atom.categorySearch = cat.name
+  }
+}
+
+// 输入时筛选
+function filterCategories(atom) {
+  atom.showCategoryDropdown = true
+}
+
+// 点击外部关闭下拉框
+function handleClickOutside(event) {
+  const dropdowns = document.querySelectorAll('.searchable-select')
+  dropdowns.forEach((dropdown, index) => {
+    if (!dropdown.contains(event.target)) {
+      const atom = result.value?.atoms?.[index]
+      if (atom) {
+        atom.showCategoryDropdown = false
+        // 如果没有选择分类，清空搜索框
+        if (!atom.category) {
+          atom.categorySearch = ''
+        } else {
+          // 恢复为已选分类的名称
+          const cat = categoriesWithParent.value.find(c => c.id === atom.category)
+          if (cat) {
+            atom.categorySearch = cat.name
+          }
+        }
+      }
+    }
+  })
 }
 
 // 本地状态
@@ -372,6 +456,14 @@ onMounted(async () => {
   if (isOllamaProvider.value) {
     await loadOllamaModels()
   }
+  
+  // 添加点击外部关闭下拉框的事件监听
+  document.addEventListener('click', handleClickOutside)
+})
+
+// 组件卸载时移除事件监听
+onUnmounted(() => {
+  document.removeEventListener('click', handleClickOutside)
 })
 
 // 监听store变化
@@ -441,6 +533,15 @@ async function handleSubmit() {
         categoryNames.value,
         categoryMap.value
       )
+      
+      // 初始化每个原子词的搜索状态
+      if (result.value?.atoms) {
+        result.value.atoms.forEach(atom => {
+          const cat = categoriesWithParent.value.find(c => c.id === atom.category)
+          atom.categorySearch = cat?.name || ''
+          atom.showCategoryDropdown = false
+        })
+      }
     } else {
       result.value = await aiStore.callAI(inputPrompt.value)
     }
@@ -1007,6 +1108,81 @@ function applyToPreset() {
   padding: 2px 8px;
   background-color: rgba(148, 163, 184, 0.1);
   border-radius: 4px;
+}
+
+/* 可搜索分类选择器 */
+.searchable-select {
+  flex: 1;
+  position: relative;
+}
+
+.category-search-input {
+  width: 100%;
+  padding: 4px 8px;
+  background-color: #0f172a;
+  border: 1px solid #475569;
+  border-radius: 4px;
+  color: #e2e8f0;
+  font-size: 12px;
+  outline: none;
+  transition: all 0.2s;
+}
+
+.category-search-input:focus {
+  border-color: #0ea5e9;
+}
+
+.category-search-input::placeholder {
+  color: #64748b;
+}
+
+.category-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin-top: 4px;
+  max-height: 200px;
+  overflow-y: auto;
+  background-color: #1e293b;
+  border: 1px solid #475569;
+  border-radius: 4px;
+  z-index: 100;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.category-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.category-option:hover {
+  background-color: #334155;
+}
+
+.category-option.is-selected {
+  background-color: rgba(14, 165, 233, 0.2);
+}
+
+.category-option .cat-name {
+  color: #e2e8f0;
+  font-size: 12px;
+}
+
+.category-option .cat-parent {
+  color: #64748b;
+  font-size: 10px;
+}
+
+.no-category {
+  padding: 12px;
+  text-align: center;
+  color: #64748b;
+  font-size: 12px;
   white-space: nowrap;
 }
 
