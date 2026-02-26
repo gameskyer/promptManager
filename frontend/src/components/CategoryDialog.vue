@@ -100,10 +100,15 @@ const form = ref({
   sort_order: 0,
 })
 
-// 获取可作为父分类的选项（排除当前分类及其子分类）
+// 获取可作为父分类的选项（根据类型过滤，排除当前分类及其子分类）
 const availableParents = computed(() => {
-  const all = categoryStore.categories
-  if (!props.category) return all.filter(c => c.parent_id === 0)
+  // 首先根据当前选择的类型过滤
+  let all = categoryStore.categories.filter(c => c.type === form.value.type)
+  
+  if (!props.category?.id) {
+    // 新建分类：只显示一级分类作为父分类选项
+    return all.filter(c => c.parent_id === 0 || c.parent_id === null)
+  }
   
   // 排除当前分类和它的子分类
   const excludeIds = new Set([props.category.id])
@@ -116,6 +121,15 @@ const availableParents = computed(() => {
   findChildren(props.category.id)
   
   return all.filter(c => !excludeIds.has(c.id))
+})
+
+// 当类型改变时，如果当前父分类不在新的可用列表中，重置为无
+watch(() => form.value.type, (newType) => {
+  const availableIds = availableParents.value.map(c => c.id)
+  // 如果当前 parent_id 不在可用列表中（且不是0），重置为0
+  if (form.value.parent_id !== 0 && !availableIds.includes(form.value.parent_id)) {
+    form.value.parent_id = 0
+  }
 })
 
 watch(() => props.category, (newCat) => {
