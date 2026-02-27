@@ -218,11 +218,21 @@ function toggleExpand(categoryId) {
   }
 }
 
-function selectCategory(category) {
+async function selectCategory(category) {
   currentView.value = 'atoms'
   emit('view-change', 'atoms')
   appStore.setCategory(category)
   appStore.setSubCategory(null)
+  
+  // 加载该分类及其子分类下的所有原子词
+  const childIds = getCategoryChildren(category.id).map(c => c.id)
+  if (childIds.length > 0) {
+    // 如果有子分类，获取所有子分类的原子词
+    await atomStore.fetchAtomsByCategories(childIds)
+  } else {
+    // 如果没有子分类，直接获取该分类的原子词
+    await atomStore.fetchAtoms(category.id)
+  }
   
   if (!expandedCategories.value.includes(category.id)) {
     expandedCategories.value.push(category.id)

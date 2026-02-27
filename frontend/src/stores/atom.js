@@ -114,6 +114,33 @@ export const useAtomStore = defineStore('atom', () => {
     }
   }
 
+  // 根据多个分类ID获取原子词（用于一级分类筛选）
+  async function fetchAtomsByCategories(categoryIds, page = 1, size = 50) {
+    loading.value = true
+    error.value = null
+    try {
+      // 获取所有原子词，然后在客户端过滤
+      const response = await GetAllAtomsPaginated(page, size * 10) // 获取更多数据
+      
+      if (response.success) {
+        const allAtoms = response.data || []
+        // 过滤出属于指定分类的原子词
+        const filteredAtoms = allAtoms.filter(a => categoryIds.includes(a.category_id))
+        atoms.value = filteredAtoms.slice(0, size)
+        totalCount.value = filteredAtoms.length
+        currentPage.value = page
+        pageSize.value = size
+      } else {
+        error.value = response.error || '获取原子词失败'
+      }
+    } catch (e) {
+      error.value = e.message
+      console.error('Failed to fetch atoms by categories:', e)
+    } finally {
+      loading.value = false
+    }
+  }
+
   async function createAtom(atomData) {
     loading.value = true
     error.value = null
@@ -413,6 +440,7 @@ export const useAtomStore = defineStore('atom', () => {
     getAtomById,
     popularAtoms,
     fetchAtoms,
+    fetchAtomsByCategories,
     searchAtoms,
     createAtom,
     updateAtom,
