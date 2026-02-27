@@ -132,12 +132,8 @@
           <ClockIcon class="w-4 h-4" />
           版本历史
         </button>
-        <button class="btn-secondary comfy-btn" @click="copyForComfyUI">
+        <button class="btn-primary" @click="usePresetWithComfyUI">
           <ClipboardDocumentListIcon class="w-4 h-4" />
-          复制到 ComfyUI
-        </button>
-        <button class="btn-primary" @click="$emit('use', preset)">
-          <PlayIcon class="w-4 h-4" />
           使用该预设
         </button>
       </div>
@@ -152,12 +148,10 @@ import {
   PhotoIcon,
   ClipboardIcon,
   PencilIcon,
-  PlayIcon,
   CubeIcon,
   SquaresPlusIcon,
   ClockIcon,
   ClipboardDocumentListIcon,
-  CheckIcon,
 } from '@heroicons/vue/24/outline'
 
 const props = defineProps({
@@ -188,8 +182,8 @@ async function copyText(text) {
   }
 }
 
-// 复制为 ComfyUI 标准格式
-async function copyForComfyUI() {
+// 使用该预设 - 复制为 ComfyUI 标准格式
+async function usePresetWithComfyUI() {
   const posText = props.preset.pos_text || ''
   const negText = props.preset.neg_text || ''
   
@@ -202,20 +196,24 @@ Steps: ${props.preset.params?.steps || 30}, CFG scale: ${props.preset.params?.cf
   
   try {
     await navigator.clipboard.writeText(comfyFormat)
-    showCopySuccess()
+    // 触发 use 事件
+    emit('use', props.preset)
+    // 关闭弹窗
+    emit('close')
+    // 显示成功提示
+    showToast('已复制到剪贴板，可粘贴到 ComfyUI')
   } catch (err) {
     console.error('Failed to copy:', err)
   }
 }
 
-// 显示复制成功提示
-function showCopySuccess() {
+// 显示提示
+function showToast(message) {
   const toast = document.createElement('div')
   toast.className = 'copy-toast'
   toast.innerHTML = `
     <div class="toast-content">
-      <CheckIcon class="w-4 h-4" />
-      <span>已复制到剪贴板</span>
+      <span>${message}</span>
     </div>
   `
   document.body.appendChild(toast)

@@ -192,12 +192,8 @@
         <FolderArrowDownIcon class="w-4 h-4" />
         保存预设
       </button>
-      <button class="btn-comfy" @click="copyForComfyUI">
-        <ClipboardDocumentListIcon class="w-4 h-4" />
-        复制到 ComfyUI
-      </button>
       <button class="btn-primary" @click="generatePrompt">
-        <SparklesIcon class="w-4 h-4" />
+        <ClipboardDocumentListIcon class="w-4 h-4" />
         生成
       </button>
     </div>
@@ -267,10 +263,9 @@ import {
   XMarkIcon,
   ClipboardIcon,
   FolderArrowDownIcon,
-  SparklesIcon,
+  ClipboardDocumentListIcon,
   PlusIcon,
   MinusIcon,
-  ClipboardDocumentListIcon,
 } from '@heroicons/vue/24/outline'
 import { useAppStore, usePresetStore, useVersionStore } from '../stores'
 
@@ -360,15 +355,8 @@ async function copyNegative() {
   }
 }
 
-function generatePrompt() {
-  // Combine both prompts
-  const fullPrompt = `Positive: ${positivePromptText.value}\n\nNegative: ${negativePromptText.value}`
-  navigator.clipboard.writeText(fullPrompt)
-  alert('完整提示词已复制到剪贴板')
-}
-
-// 复制为 ComfyUI/A1111 标准格式
-async function copyForComfyUI() {
+// 生成 ComfyUI/A1111 标准格式并复制到剪贴板
+async function generatePrompt() {
   const posText = positivePromptText.value || ''
   const negText = negativePromptText.value || ''
   
@@ -386,7 +374,7 @@ Steps: 30, CFG scale: 7, Sampler: DPM++ 2M Karras`
     toast.className = 'copy-toast'
     toast.innerHTML = `
       <div class="toast-content">
-        <span>已复制 ComfyUI 格式到剪贴板</span>
+        <span>已复制到剪贴板，可粘贴到 ComfyUI</span>
       </div>
     `
     document.body.appendChild(toast)
