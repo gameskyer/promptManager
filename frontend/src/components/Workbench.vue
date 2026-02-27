@@ -192,6 +192,10 @@
         <FolderArrowDownIcon class="w-4 h-4" />
         保存预设
       </button>
+      <button class="btn-comfy" @click="copyForComfyUI">
+        <ClipboardDocumentListIcon class="w-4 h-4" />
+        复制到 ComfyUI
+      </button>
       <button class="btn-primary" @click="generatePrompt">
         <SparklesIcon class="w-4 h-4" />
         生成
@@ -266,6 +270,7 @@ import {
   SparklesIcon,
   PlusIcon,
   MinusIcon,
+  ClipboardDocumentListIcon,
 } from '@heroicons/vue/24/outline'
 import { useAppStore, usePresetStore, useVersionStore } from '../stores'
 
@@ -360,6 +365,40 @@ function generatePrompt() {
   const fullPrompt = `Positive: ${positivePromptText.value}\n\nNegative: ${negativePromptText.value}`
   navigator.clipboard.writeText(fullPrompt)
   alert('完整提示词已复制到剪贴板')
+}
+
+// 复制为 ComfyUI/A1111 标准格式
+async function copyForComfyUI() {
+  const posText = positivePromptText.value || ''
+  const negText = negativePromptText.value || ''
+  
+  // ComfyUI/A1111 标准格式
+  const comfyFormat = `${posText}
+
+Negative prompt: ${negText}
+
+Steps: 30, CFG scale: 7, Sampler: DPM++ 2M Karras`
+  
+  try {
+    await navigator.clipboard.writeText(comfyFormat)
+    // 显示成功提示
+    const toast = document.createElement('div')
+    toast.className = 'copy-toast'
+    toast.innerHTML = `
+      <div class="toast-content">
+        <span>已复制 ComfyUI 格式到剪贴板</span>
+      </div>
+    `
+    document.body.appendChild(toast)
+    requestAnimationFrame(() => toast.classList.add('show'))
+    setTimeout(() => {
+      toast.classList.remove('show')
+      setTimeout(() => toast.remove(), 300)
+    }, 2000)
+  } catch (err) {
+    console.error('Failed to copy:', err)
+    alert('复制失败')
+  }
 }
 
 async function savePreset() {
@@ -809,6 +848,58 @@ if (typeof window !== 'undefined') {
 
 .btn-primary:hover {
   background-color: #0ea5e9;
+}
+
+.btn-comfy {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  background-color: #1e293b;
+  border: 1px solid #f59e0b;
+  color: #f59e0b;
+}
+
+.btn-comfy:hover {
+  background-color: rgba(245, 158, 11, 0.1);
+  border-color: #fbbf24;
+  color: #fbbf24;
+}
+
+/* 复制成功提示 */
+.copy-toast {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%) translateY(-100px);
+  z-index: 9999;
+  opacity: 0;
+  transition: all 0.3s ease;
+}
+
+.copy-toast.show {
+  transform: translateX(-50%) translateY(0);
+  opacity: 1;
+}
+
+.toast-content {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px;
+  background-color: #10b981;
+  color: white;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
 /* Modal Styles */
