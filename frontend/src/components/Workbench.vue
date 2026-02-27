@@ -219,6 +219,18 @@
           </div>
           
           <div class="form-group">
+            <label>分类</label>
+            <select v-model="presetForm.categoryId">
+              <option :value="0">未分类</option>
+              <optgroup v-for="parent in presetCategories" :key="parent.id" :label="parent.name">
+                <option v-for="child in getPresetChildren(parent.id)" :key="child.id" :value="child.id">
+                  {{ child.name }}
+                </option>
+              </optgroup>
+            </select>
+          </div>
+          
+          <div class="form-group">
             <label>描述</label>
             <textarea 
               v-model="presetForm.description" 
@@ -267,11 +279,12 @@ import {
   PlusIcon,
   MinusIcon,
 } from '@heroicons/vue/24/outline'
-import { useAppStore, usePresetStore, useVersionStore } from '../stores'
+import { useAppStore, usePresetStore, useVersionStore, useCategoryStore } from '../stores'
 
 const appStore = useAppStore()
 const presetStore = usePresetStore()
 const versionStore = useVersionStore()
+const categoryStore = useCategoryStore()
 
 const { selectedAtoms, currentPreset, currentVersion } = storeToRefs(appStore)
 const showSaveDialog = ref(false)
@@ -285,7 +298,17 @@ const draggingType = ref(null)
 const presetForm = ref({
   title: '',
   description: '',
+  categoryId: 0,
 })
+
+// 获取预设分类
+const presetCategories = computed(() => 
+  categoryStore.categories.filter(c => c.type === 'PRESET' && (c.parent_id === 0 || c.parent_id === null))
+)
+
+function getPresetChildren(parentId) {
+  return categoryStore.categories.filter(c => c.type === 'PRESET' && c.parent_id === parentId)
+}
 
 // Watch for dialog open to reset form
 watch(() => showSaveDialog.value, (val) => {
@@ -293,6 +316,7 @@ watch(() => showSaveDialog.value, (val) => {
     presetForm.value = {
       title: '',
       description: '',
+      categoryId: 0,
     }
   }
 })
@@ -396,12 +420,15 @@ async function savePreset() {
   }
   
   try {
+    // 收集原子词 ID
+    const atomIds = selectedAtoms.value.map(a => a.id)
+    
     await presetStore.createPreset(
       presetForm.value.title,
-      0, // categoryId - 默认分类
+      presetForm.value.categoryId || 0, // 使用选择的分类
       positivePromptText.value,
       negativePromptText.value,
-      [], // atoms
+      atomIds, // 传递原子词 ID
       { // params
         model: '',
         steps: 30,
@@ -982,7 +1009,8 @@ if (typeof window !== 'undefined') {
 }
 
 .form-group input,
-.form-group textarea {
+.form-group textarea,
+.form-group select {
   width: 100%;
   padding: 10px 12px;
   background-color: #1e293b;
@@ -995,8 +1023,20 @@ if (typeof window !== 'undefined') {
 }
 
 .form-group input:focus,
-.form-group textarea:focus {
+.form-group textarea:focus,
+.form-group select:focus {
   border-color: #0ea5e9;
+}
+
+.form-group select option {
+  background-color: #1e293b;
+  color: #e2e8f0;
+}
+
+.form-group select optgroup {
+  background-color: #0f172a;
+  color: #94a3b8;
+  font-weight: 600;
 }
 
 .form-group textarea {
