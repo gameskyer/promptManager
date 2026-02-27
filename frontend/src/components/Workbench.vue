@@ -423,25 +423,39 @@ async function savePreset() {
     // 收集原子词 ID
     const atomIds = selectedAtoms.value.map(a => a.id)
     
-    await presetStore.createPreset(
+    console.log('[Workbench] Saving preset:', {
+      title: presetForm.value.title,
+      categoryId: presetForm.value.categoryId,
+      posText: positivePromptText.value,
+      negText: negativePromptText.value,
+      atomIds: atomIds,
+    })
+    
+    const result = await presetStore.createPreset(
       presetForm.value.title,
-      presetForm.value.categoryId || 0, // 使用选择的分类
+      presetForm.value.categoryId || 0,
       positivePromptText.value,
       negativePromptText.value,
-      atomIds, // 传递原子词 ID
-      { // params
+      atomIds,
+      {
         model: '',
         steps: 30,
         cfg: 7,
         sampler: 'DPM++ 2M Karras',
       },
-      [], // loras
-      [] // previews
+      [],
+      []
     )
+    
+    console.log('[Workbench] Preset saved:', result)
+    
+    // 刷新预设列表
+    await presetStore.fetchPresets(1, 20, 0)
     
     alert('预设保存成功！')
     showSaveDialog.value = false
   } catch (err) {
+    console.error('[Workbench] Save failed:', err)
     alert('保存失败：' + err.message)
   }
 }

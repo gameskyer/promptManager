@@ -115,6 +115,7 @@ export const usePresetStore = defineStore('preset', () => {
       })
       
       if (response.success) {
+        console.log('[presetStore] createPreset response:', response.data)
         presets.value.unshift(response.data)
         return response.data
       } else {
