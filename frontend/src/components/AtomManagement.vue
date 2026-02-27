@@ -444,7 +444,8 @@ const rootAtomCategories = computed(() =>
 
 const childCategories = computed(() => {
   if (!filterRootCategory.value) return []
-  const rootCat = rootAtomCategories.value.find(c => c.id === filterRootCategory.value)
+  const rootId = Number(filterRootCategory.value)
+  const rootCat = rootAtomCategories.value.find(c => c.id === rootId)
   return rootCat?.children || []
 })
 
@@ -454,11 +455,13 @@ const filteredAtoms = computed(() => {
   // Category filter
   if (filterCategory.value) {
     // 二级分类筛选
-    result = result.filter(a => a.category_id === filterCategory.value)
+    const catId = Number(filterCategory.value)
+    result = result.filter(a => a.category_id === catId)
   } else if (filterRootCategory.value) {
     // 一级分类筛选 - 包含该分类下所有子分类的原子词
+    const rootId = Number(filterRootCategory.value)
     const childIds = childCategories.value.map(c => c.id)
-    childIds.push(filterRootCategory.value) // 也包含直接属于一级分类的原子词
+    childIds.push(rootId) // 也包含直接属于一级分类的原子词
     result = result.filter(a => childIds.includes(a.category_id))
   }
 
@@ -486,10 +489,12 @@ const totalPages = computed(() => {
   let count = atoms.value.length
 
   if (filterCategory.value) {
-    count = atoms.value.filter(a => a.category_id === filterCategory.value).length
+    const catId = Number(filterCategory.value)
+    count = atoms.value.filter(a => a.category_id === catId).length
   } else if (filterRootCategory.value) {
+    const rootId = Number(filterRootCategory.value)
     const childIds = childCategories.value.map(c => c.id)
-    childIds.push(filterRootCategory.value)
+    childIds.push(rootId)
     count = atoms.value.filter(a => childIds.includes(a.category_id)).length
   }
   if (filterType.value) {
