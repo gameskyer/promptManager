@@ -87,19 +87,33 @@
           </div>
         </div>
         
-        <!-- 预设分类列表 -->
+        <!-- 预设分类列表（层级展示） -->
         <div
           v-for="category in presetRootCategories"
           :key="category.id"
           class="menu-item"
-          :class="{ active: currentView === 'presets' && currentPresetCategory === category.id }"
-          @click="selectPresetsView(category.id)"
+          :class="{ 
+            active: currentView === 'presets' && currentPresetCategory === category.id && !currentPresetSubCategory,
+            expanded: expandedPresetCategories.includes(category.id)
+          }"
         >
-          <div class="menu-item-header">
+          <!-- 一级分类 -->
+          <div class="menu-item-header" @click="selectPresetsCategory(category)">
+            <ChevronDownIcon 
+              v-if="expandedPresetCategories.includes(category.id) && getPresetChildren(category.id).length > 0"
+              class="w-4 h-4 chevron"
+              @click.stop="togglePresetExpand(category.id)"
+            />
+            <ChevronRightIcon 
+              v-else-if="getPresetChildren(category.id).length > 0"
+              class="w-4 h-4 chevron"
+              @click.stop="togglePresetExpand(category.id)"
+            />
+            <span v-else class="w-4 h-4 spacer"></span>
             <FolderIcon class="w-4 h-4 icon text-amber-300" />
             <span class="item-label">{{ category.name }}</span>
-            <span v-if="getPresetCountByCategory(category.id) > 0" class="count-badge">
-              {{ getPresetCountByCategory(category.id) }}
+            <span v-if="getPresetCountWithChildren(category.id) > 0" class="count-badge">
+              {{ getPresetCountWithChildren(category.id) }}
             </span>
             <button 
               class="edit-btn"
@@ -107,6 +121,29 @@
             >
               <PencilIcon class="w-3 h-3" />
             </button>
+          </div>
+          
+          <!-- 二级分类 -->
+          <div v-if="expandedPresetCategories.includes(category.id)" class="sub-menu">
+            <div
+              v-for="child in getPresetChildren(category.id)"
+              :key="child.id"
+              class="sub-menu-item"
+              :class="{ active: currentView === 'presets' && currentPresetSubCategory === child.id }"
+              @click="selectPresetsSubCategory(child)"
+            >
+              <DocumentIcon class="w-3 h-3 icon" />
+              <span class="item-label">{{ child.name }}</span>
+              <span v-if="getPresetCountByCategory(child.id) > 0" class="count-badge">
+                {{ getPresetCountByCategory(child.id) }}
+              </span>
+              <button 
+                class="edit-btn"
+                @click.stop="editCategory(child)"
+              >
+                <PencilIcon class="w-3 h-3" />
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -204,9 +241,31 @@ const atomCount = computed(() => atoms.value.length)
 const categoryCount = computed(() => categories.value.length)
 
 const currentPresetCategory = ref(0)
+const currentPresetSubCategory = ref(null)
+const expandedPresetCategories = ref([])
 
 function getPresetCountByCategory(categoryId) {
   return activePresets.value.filter(p => p.category_id === categoryId).length
+}
+
+// 获取分类及其子分类下的所有预设数量
+function getPresetCountWithChildren(categoryId) {
+  const children = getPresetChildren(categoryId)
+  const childIds = children.map(c => c.id)
+  return activePresets.value.filter(p => p.category_id === categoryId || childIds.includes(p.category_id)).length
+}
+
+function getPresetChildren(parentId) {
+  return categories.value.filter(c => c.type === 'PRESET' && c.parent_id === parentId)
+}
+
+function togglePresetExpand(categoryId) {
+  const index = expandedPresetCategories.value.indexOf(categoryId)
+  if (index === -1) {
+    expandedPresetCategories.value.push(categoryId)
+  } else {
+    expandedPresetCategories.value.splice(index, 1)
+  }
 }
 
 function toggleExpand(categoryId) {
@@ -249,13 +308,56 @@ async function selectSubCategory(subCategory) {
 function selectPresetsView(categoryId = 0) {
   currentView.value = 'presets'
   currentPresetCategory.value = categoryId
+  currentPresetSubCategory.value = null
   emit('view-change', 'presets')
   appStore.setCurrentPreset(null)
   appStore.setCategory(null)
   appStore.setSubCategory(null)
   appStore.activeTab = 'presets'
   // 传递分类ID给父组件
-  emit('select-preset-category', categoryId)
+  emit('select-preset-category', { categoryId, subCategoryId: null })
+}
+
+// 选择预设一级分类
+function selectPresetsCategory(category) {
+  currentView.value = 'presets'
+  currentPresetCategory.value = category.id
+  currentPresetSubCategory.value = null
+  emit('view-change', 'presets')
+  appStore.setCurrentPreset(null)
+  appStore.setCategory(null)
+  appStore.setSubCategory(null)
+  appStore.activeTab = 'presets'
+  
+  // 自动展开
+  if (!expandedPresetCategories.value.includes(category.id)) {
+    expandedPresetCategories.value.push(category.id)
+  }
+  
+  // 传递分类ID给父组件（包含子分类ID列表）
+  const children = getPresetChildren(category.id)
+  emit('select-preset-category', { 
+    categoryId: category.id, 
+    subCategoryId: null,
+    childIds: children.map(c => c.id)
+  })
+}
+
+// 选择预设二级分类
+function selectPresetsSubCategory(subCategory) {
+  currentView.value = 'presets'
+  currentPresetSubCategory.value = subCategory.id
+  emit('view-change', 'presets')
+  appStore.setCurrentPreset(null)
+  appStore.setCategory(null)
+  appStore.setSubCategory(null)
+  appStore.activeTab = 'presets'
+  
+  // 传递分类ID给父组件
+  emit('select-preset-category', { 
+    categoryId: subCategory.parent_id, 
+    subCategoryId: subCategory.id 
+  })
 }
 
 function createPresetCategory() {

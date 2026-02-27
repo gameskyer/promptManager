@@ -6,11 +6,11 @@
     <!-- Main Layout -->
     <div class="main-layout">
       <!-- Side Menu -->
-      <SideMenu ref="sideMenu" @view-change="handleViewChange" />
+      <SideMenu ref="sideMenu" @view-change="handleViewChange" @select-preset-category="handlePresetCategoryChange" />
       
       <!-- Main Content - 根据当前视图显示不同内容 -->
       <MainContent v-if="currentView === 'atoms'" />
-      <PresetList v-else-if="currentView === 'presets'" />
+      <PresetList v-else-if="currentView === 'presets'" :selected-category="selectedPresetCategory" />
       <AtomManagement v-else-if="currentView === 'atom-management'" />
       <CategoryManagement v-else-if="currentView === 'category-management'" />
       
@@ -47,9 +47,14 @@ const { showTimeline } = storeToRefs(appStore)
 
 const currentView = ref('atoms') // 'atoms' | 'presets' | 'atom-management' | 'category-management'
 const sideMenu = ref(null)
+const selectedPresetCategory = ref({ categoryId: 0, subCategoryId: null, childIds: [] })
 
 function handleViewChange(view) {
   currentView.value = view
+}
+
+function handlePresetCategoryChange(categoryInfo) {
+  selectedPresetCategory.value = categoryInfo
 }
 
 onMounted(async () => {

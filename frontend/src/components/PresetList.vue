@@ -1,84 +1,6 @@
 <template>
   <div class="preset-list-container">
-    <!-- 左侧分类侧边栏 -->
-    <aside class="preset-sidebar">
-      <div class="sidebar-header">
-        <span class="sidebar-title">预设分类</span>
-        <button class="add-btn" @click="createCategory" title="新建分类">
-          <PlusIcon class="w-3 h-3" />
-        </button>
-      </div>
-      
-      <div class="category-list">
-        <!-- 全部预设 -->
-        <div 
-          class="category-item"
-          :class="{ active: currentCategoryId === 0 }"
-          @click="selectCategory(0)"
-        >
-          <SwatchIcon class="w-4 h-4 icon" />
-          <span class="category-name">全部预设</span>
-          <span class="category-count">{{ totalPresetCount }}</span>
-        </div>
-        
-        <!-- 分类列表（层级展示） -->
-        <div
-          v-for="category in presetRootCategories"
-          :key="category.id"
-          class="category-item"
-          :class="{ 
-            active: currentCategoryId === category.id,
-            expanded: expandedCategories.includes(category.id)
-          }"
-        >
-          <!-- 一级分类 -->
-          <div class="category-item-header" @click="selectCategory(category.id)">
-            <ChevronDownIcon 
-              v-if="expandedCategories.includes(category.id) && getPresetChildren(category.id).length > 0"
-              class="w-4 h-4 chevron"
-              @click.stop="toggleExpand(category.id)"
-            />
-            <ChevronRightIcon 
-              v-else-if="getPresetChildren(category.id).length > 0"
-              class="w-4 h-4 chevron"
-              @click.stop="toggleExpand(category.id)"
-            />
-            <span v-else class="w-4 h-4 spacer"></span>
-            <FolderIcon class="w-4 h-4 icon" :class="{ 'text-amber-400': currentCategoryId === category.id }" />
-            <span class="category-name">{{ category.name }}</span>
-            <span class="category-count">{{ getPresetCountWithChildren(category.id) }}</span>
-          </div>
-          
-          <!-- 二级分类 -->
-          <div v-if="expandedCategories.includes(category.id)" class="sub-category-list">
-            <div
-              v-for="child in getPresetChildren(category.id)"
-              :key="child.id"
-              class="sub-category-item"
-              :class="{ active: currentCategoryId === child.id }"
-              @click="selectCategory(child.id)"
-            >
-              <DocumentIcon class="w-3 h-3 icon" />
-              <span class="category-name">{{ child.name }}</span>
-              <span class="category-count">{{ getPresetCountByCategory(child.id) }}</span>
-            </div>
-          </div>
-        </div>
-        
-        <!-- 无分类 -->
-        <div 
-          class="category-item"
-          :class="{ active: currentCategoryId === -1 }"
-          @click="selectCategory(-1)"
-        >
-          <QuestionMarkCircleIcon class="w-4 h-4 icon" />
-          <span class="category-name">未分类</span>
-          <span class="category-count">{{ uncategorizedCount }}</span>
-        </div>
-      </div>
-    </aside>
-    
-    <!-- 右侧预设列表 -->
+    <!-- 预设列表视图 -->
     <div class="preset-list-view">
       <!-- 头部工具栏 -->
       <div class="toolbar">
@@ -147,36 +69,29 @@
         @use="usePreset(viewingPreset)"
         @view-history="viewPresetHistory"
       />
-      
-      <!-- 分类对话框 -->
-      <CategoryDialog
-        v-if="showCategoryDialog"
-        :category="{ type: 'PRESET', parent_id: 0 }"
-        @close="showCategoryDialog = false"
-        @save="saveCategory"
-      />
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import {
   SwatchIcon,
   PlusIcon,
   MagnifyingGlassIcon,
-  FolderIcon,
-  QuestionMarkCircleIcon,
-  ChevronRightIcon,
-  ChevronDownIcon,
-  DocumentIcon,
 } from '@heroicons/vue/24/outline'
 import { useAppStore, usePresetStore, useCategoryStore, useVersionStore, useImageStore } from '../stores'
 import PresetCard from './PresetCard.vue'
 import PresetDialog from './PresetDialog.vue'
 import PresetDetailModal from './PresetDetailModal.vue'
-import CategoryDialog from './CategoryDialog.vue'
+
+const props = defineProps({
+  selectedCategory: {
+    type: Object,
+    default: () => ({ categoryId: 0, subCategoryId: null, childIds: [] })
+  }
+})
 
 const appStore = useAppStore()
 const presetStore = usePresetStore()
@@ -187,92 +102,37 @@ const imageStore = useImageStore()
 const { activePresets: presets } = storeToRefs(presetStore)
 const { categories } = storeToRefs(categoryStore)
 
-// 分类筛选
+// 当前选中的分类
 const currentCategoryId = ref(0) // 0=全部, -1=未分类, >0=具体分类
-const expandedCategories = ref([]) // 展开的一级分类ID列表
 
-// 一级分类（PRESET类型且parent_id为0或null）
-const presetRootCategories = computed(() =>
-  categories.value.filter(c => c.type === 'PRESET' && (c.parent_id === 0 || c.parent_id === null))
-)
+// 监听 props 变化
+watch(() => props.selectedCategory, (newVal) => {
+  if (newVal) {
+    if (newVal.subCategoryId) {
+      // 选中二级分类
+      currentCategoryId.value = newVal.subCategoryId
+    } else if (newVal.categoryId !== undefined) {
+      // 选中一级分类或全部
+      currentCategoryId.value = newVal.categoryId
+    }
+  }
+}, { immediate: true, deep: true })
+
+// 根据ID获取分类名称
+function getCategoryNameById(categoryId) {
+  if (categoryId === 0) return '全部预设'
+  if (categoryId === -1) return '未分类'
+  const cat = categories.value.find(c => c.id === categoryId)
+  return cat?.name || '预设'
+}
+
+const currentCategoryName = computed(() => {
+  return getCategoryNameById(currentCategoryId.value)
+})
 
 // 获取分类的子分类
 function getPresetChildren(parentId) {
   return categories.value.filter(c => c.type === 'PRESET' && c.parent_id === parentId)
-}
-
-const currentCategoryName = computed(() => {
-  if (currentCategoryId.value === 0) return '全部预设'
-  if (currentCategoryId.value === -1) return '未分类'
-  const cat = presetCategories.value.find(c => c.id === currentCategoryId.value)
-  return cat?.name || '预设'
-})
-
-const totalPresetCount = computed(() => presets.value.length)
-
-const uncategorizedCount = computed(() => 
-  presets.value.filter(p => !p.category_id || p.category_id === 0).length
-)
-
-function getPresetCountByCategory(categoryId) {
-  return presets.value.filter(p => p.category_id === categoryId).length
-}
-
-// 获取分类及其子分类下的所有预设数量
-function getPresetCountWithChildren(categoryId) {
-  const children = getPresetChildren(categoryId)
-  const childIds = children.map(c => c.id)
-  return presets.value.filter(p => p.category_id === categoryId || childIds.includes(p.category_id)).length
-}
-
-function toggleExpand(categoryId) {
-  const index = expandedCategories.value.indexOf(categoryId)
-  if (index === -1) {
-    expandedCategories.value.push(categoryId)
-  } else {
-    expandedCategories.value.splice(index, 1)
-  }
-}
-
-async function selectCategory(categoryId) {
-  const isSameCategory = currentCategoryId.value === categoryId
-  currentCategoryId.value = categoryId
-  
-  // 根据分类加载预设
-  if (categoryId === 0) {
-    await presetStore.fetchPresets(1, 20, 0)
-  } else if (categoryId === -1) {
-    // 未分类，需要在客户端筛选
-    await presetStore.fetchPresets(1, 100, 0)
-  } else {
-    // 检查是否是一级分类
-    const isRootCategory = presetRootCategories.value.some(c => c.id === categoryId)
-    
-    if (isRootCategory) {
-      // 一级分类：获取该分类及其子分类的所有预设
-      const children = getPresetChildren(categoryId)
-      if (children.length > 0) {
-        // 有子分类，获取所有预设然后在客户端过滤
-        await presetStore.fetchPresets(1, 100, 0)
-      } else {
-        // 没有子分类，直接获取该分类的预设
-        await presetStore.fetchPresets(1, 20, categoryId)
-      }
-      
-      // 如果是点击同一分类，切换展开状态
-      if (isSameCategory) {
-        toggleExpand(categoryId)
-      } else {
-        // 新选中的分类，自动展开
-        if (!expandedCategories.value.includes(categoryId)) {
-          expandedCategories.value.push(categoryId)
-        }
-      }
-    } else {
-      // 二级分类：直接获取该分类的预设
-      await presetStore.fetchPresets(1, 20, categoryId)
-    }
-  }
 }
 
 // 搜索和筛选
@@ -286,7 +146,7 @@ const filteredPresets = computed(() => {
     result = result.filter(p => !p.category_id || p.category_id === 0)
   } else if (currentCategoryId.value > 0) {
     // 检查是否是一级分类
-    const isRootCategory = presetRootCategories.value.some(c => c.id === currentCategoryId.value)
+    const isRootCategory = getPresetChildren(0).some(c => c.id === currentCategoryId.value)
     
     if (isRootCategory) {
       // 一级分类：包含该分类及其子分类的预设
@@ -317,7 +177,6 @@ const emptyStateText = computed(() => {
 
 // 对话框状态
 const showPresetDialog = ref(false)
-const showCategoryDialog = ref(false)
 const editingPreset = ref(null)
 const viewingPreset = ref(null)
 
@@ -325,15 +184,6 @@ const viewingPreset = ref(null)
 function createPreset() {
   editingPreset.value = null
   showPresetDialog.value = true
-}
-
-function createCategory() {
-  showCategoryDialog.value = true
-}
-
-async function saveCategory(data) {
-  await categoryStore.createCategory(data.name, 'PRESET', 0)
-  showCategoryDialog.value = false
 }
 
 function editPreset(preset) {
@@ -578,191 +428,7 @@ onMounted(async () => {
   overflow: hidden;
 }
 
-/* 左侧分类侧边栏 */
-.preset-sidebar {
-  width: 200px;
-  background-color: #0f172a;
-  border-right: 1px solid #1e293b;
-  display: flex;
-  flex-direction: column;
-  flex-shrink: 0;
-}
-
-.sidebar-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 16px 12px;
-  border-bottom: 1px solid #1e293b;
-}
-
-.sidebar-title {
-  font-size: 11px;
-  font-weight: 600;
-  color: #64748b;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.add-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 20px;
-  border-radius: 4px;
-  background-color: transparent;
-  border: none;
-  color: #64748b;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.add-btn:hover {
-  background-color: rgba(255, 255, 255, 0.1);
-  color: #e2e8f0;
-}
-
-.category-list {
-  flex: 1;
-  overflow-y: auto;
-  padding: 8px;
-}
-
-/* 一级分类 */
-.category-item {
-  display: flex;
-  flex-direction: column;
-  border-radius: 6px;
-  transition: all 0.2s;
-  margin-bottom: 2px;
-}
-
-.category-item-header {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 10px 12px;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.category-item-header:hover {
-  background-color: rgba(255, 255, 255, 0.05);
-}
-
-.category-item.active > .category-item-header {
-  background-color: #0284c7;
-}
-
-.category-item .icon {
-  flex-shrink: 0;
-  color: #94a3b8;
-}
-
-.category-item.active .icon {
-  color: white;
-}
-
-.category-item .chevron {
-  flex-shrink: 0;
-  color: #64748b;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.category-item .chevron:hover {
-  color: #e2e8f0;
-}
-
-.category-item .spacer {
-  flex-shrink: 0;
-}
-
-.category-name {
-  flex: 1;
-  font-size: 13px;
-  color: #e2e8f0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.category-item.active .category-name {
-  color: white;
-}
-
-.category-count {
-  font-size: 11px;
-  font-weight: 600;
-  padding: 2px 8px;
-  background-color: rgba(255, 255, 255, 0.1);
-  border-radius: 10px;
-  color: #94a3b8;
-}
-
-.category-item.active .category-count {
-  background-color: rgba(255, 255, 255, 0.2);
-  color: white;
-}
-
-/* 二级分类列表 */
-.sub-category-list {
-  padding-left: 28px;
-  padding-bottom: 4px;
-}
-
-.sub-category-item {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 12px;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: all 0.2s;
-  margin-bottom: 2px;
-}
-
-.sub-category-item:hover {
-  background-color: rgba(255, 255, 255, 0.05);
-}
-
-.sub-category-item.active {
-  background-color: rgba(2, 132, 199, 0.3);
-}
-
-.sub-category-item .icon {
-  flex-shrink: 0;
-  color: #64748b;
-}
-
-.sub-category-item.active .icon {
-  color: #38bdf8;
-}
-
-.sub-category-item .category-name {
-  font-size: 12px;
-  color: #94a3b8;
-}
-
-.sub-category-item.active .category-name {
-  color: #38bdf8;
-}
-
-.sub-category-item .category-count {
-  font-size: 10px;
-  padding: 2px 6px;
-  background-color: rgba(255, 255, 255, 0.05);
-  color: #64748b;
-}
-
-.sub-category-item.active .category-count {
-  background-color: rgba(56, 189, 248, 0.2);
-  color: #38bdf8;
-}
-
-/* 右侧预设列表 */
+/* 预设列表视图 */
 .preset-list-view {
   flex: 1;
   display: flex;
