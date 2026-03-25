@@ -114,7 +114,12 @@ func (h *PresetHandler) UpdatePreset(req UpdatePresetRequest) PresetResponse {
 	if err != nil {
 		return PresetResponse{Success: false, Error: err.Error()}
 	}
-	return PresetResponse{Success: true, Data: preset}
+	// Convert to include snapshot data
+	result, err := h.service.ToPresetWithSnapshot(preset)
+	if err != nil {
+		return PresetResponse{Success: false, Error: err.Error()}
+	}
+	return PresetResponse{Success: true, Data: result}
 }
 
 // SoftDeletePreset soft deletes a preset

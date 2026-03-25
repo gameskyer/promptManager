@@ -143,6 +143,7 @@ export const usePresetStore = defineStore('preset', () => {
         const preset = presets.value.find(p => p.id === id)
         if (preset) {
           preset.title = title
+          preset.category_id = categoryId
           preset.updated_at = new Date().toISOString()
         }
         return response.data

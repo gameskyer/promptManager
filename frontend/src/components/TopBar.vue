@@ -266,7 +266,7 @@ function closePresetDialog() {
 
 async function savePreset(data) {
   if (data.id) {
-    await presetStore.updatePreset(data.id, data.title)
+    await presetStore.updatePreset(data.id, data.title, data.category_id || 0)
     // 更新其他字段
     const preset = presetStore.presets.find(p => p.id === data.id)
     if (preset) {
