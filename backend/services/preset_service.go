@@ -98,6 +98,11 @@ func (s *PresetService) CreatePreset(title string, categoryID uint, posText, neg
 		return nil, err
 	}
 	
+	// Reload preset with versions
+	if err := s.db.Preload("Versions").First(preset, preset.ID).Error; err != nil {
+		return nil, err
+	}
+	
 	return preset, nil
 }
 
