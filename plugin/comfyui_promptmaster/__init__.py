@@ -5,7 +5,6 @@ A plugin that integrates PromptMaster's atom search into ComfyUI
 
 import os
 import sys
-import json
 
 # Add current directory to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -25,8 +24,11 @@ NODE_DISPLAY_NAME_MAPPINGS = {
 
 __all__ = ['NODE_CLASS_MAPPINGS', 'NODE_DISPLAY_NAME_MAPPINGS']
 
-# Web 扩展路径
-WEB_DIRECTORY = "./web"
+# Web 扩展路径 - 使用相对于 ComfyUI web/extensions 的路径
+# ComfyUI 会将此目录下的 .js 文件加载为扩展
+WEB_DIRECTORY = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web")
+
+print(f"[PromptMaster] Plugin loaded. Web directory: {WEB_DIRECTORY}")
 
 
 # =============================================================================
@@ -36,7 +38,6 @@ WEB_DIRECTORY = "./web"
 def setup_comfyui_routes(server):
     """Setup routes with ComfyUI's aiohttp server"""
     try:
-        import aiohttp
         from aiohttp import web
         
         db = get_db()
@@ -126,14 +127,12 @@ def setup_comfyui_routes(server):
 
 
 # Try to get the server instance and setup routes
-# This will be called when ComfyUI loads the extension
 try:
-    # Method 1: Try to get server from comfyui module
     import server
-    if hasattr(server, 'PromptServer') and hasattr(server.PromptServer, 'instance'):
+    if hasattr(server, 'PromptServer') and server.PromptServer.instance:
         setup_comfyui_routes(server.PromptServer.instance)
 except Exception as e:
-    print(f"[PromptMaster] Note: Routes will be set up later: {e}")
+    print(f"[PromptMaster] Note: Routes will be set up when server is ready: {e}")
 
 
 # Also export a setup function that can be called manually if needed
