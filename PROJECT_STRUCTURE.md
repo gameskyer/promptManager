@@ -93,19 +93,19 @@ promptManager/
 │       │   ├── 📄 MainContent.vue       # 主内容区（原子词列表）
 │       │   ├── 📄 Workbench.vue         # 右侧工作台
 │       │   ├── 📄 Timeline.vue          # 底部时间轴
-│       │   ├── 📄 AtomCard.vue          # 原子词卡片
+│       │   ├── 📄 AtomCard.vue          # 原子词卡片（含复制、同义词交互）
 │       │   ├── 📄 AtomDialog.vue        # 原子词编辑弹窗
-│       │   ├── 📄 PresetCard.vue        # 预设卡片
+│       │   ├── 📄 PresetCard.vue        # 预设卡片（含图片查看器、缩略图条）
 │       │   ├── 📄 PresetList.vue        # 预设列表页面
 │       │   ├── 📄 PresetDialog.vue      # 预设编辑弹窗
-│       │   ├── 📄 PresetDetailModal.vue # 预设详情弹窗
+│       │   ├── 📄 PresetDetailModal.vue # 预设详情弹窗（含图片查看器）
 │       │   ├── 📄 VersionDetailModal.vue# 版本详情弹窗
 │       │   ├── 📄 CategoryTreeNode.vue  # 分类树组件
 │       │   ├── 📄 CategoryManagement.vue# 分类管理页面
 │       │   ├── 📄 CategoryDialog.vue    # 分类编辑弹窗
 │       │   ├── 📄 AtomManagement.vue    # 原子词管理页面
 │       │   ├── 📄 ImageUpload.vue       # 图片上传组件
-│       │   ├── 📄 ImageViewer.vue       # 图片查看器
+│       │   ├── 📄 ImageViewer.vue       # 通用图片查看器（放大/缩小/拖拽/键盘导航）
 │       │   ├── 📄 AIModal.vue           # AI 功能弹窗
 │       │   ├── 📄 SettingsModal.vue     # 设置弹窗
 │       │   ├── 📄 BackupModal.vue       # 备份弹窗
@@ -161,9 +161,11 @@ promptManager/
 | 原子词 CRUD | 创建、读取、更新、删除原子词 |
 | 分类归属 | 将原子词归类到不同分类 |
 | 同义词管理 | 支持多个同义词，搜索时可关联查找 |
+| 同义词交互 | 点击同义词可添加到工作台或复制到剪贴板 |
 | 使用统计 | 记录使用次数和最后使用时间 |
 | 批量导入 | 支持 JSON 格式批量导入 |
 | 热度排序 | 按使用频率排序显示 |
+| 一键复制 | 快速复制原子词（含 label + value）|
 
 **数据字段**：
 - `value`: 英文提示词（如 "masterpiece"）
@@ -185,7 +187,9 @@ promptManager/
 | 版本控制 | 每个预设支持多版本快照 |
 | 正向/负向分离 | 分别存储正向和负向提示词 |
 | 关联原子词 | 记录预设包含的原子词 ID 列表 |
-| 预览图管理 | 支持上传多张预览图 |
+| 预览图管理 | 支持上传多张预览图，可切换封面 |
+| 图片查看器 | 全屏查看预览图，支持键盘导航（←/→/ESC）|
+| 缩略图条 | 底部缩略图快速切换和浏览 |
 | 软删除 | 支持删除后恢复 |
 | Fork 功能 | 基于现有版本创建新预设 |
 
@@ -311,7 +315,7 @@ promptManager/
 
 ### 9. 图片管理 (Image)
 
-**功能描述**：预览图的上传和展示
+**功能描述**：预览图的上传、展示和全屏查看
 
 | 功能 | 说明 |
 |------|------|
@@ -319,6 +323,10 @@ promptManager/
 | 本地存储 | 图片保存到 ./images 目录 |
 | 静态服务 | 通过 /images/ 路径访问 |
 | 缩略图 | 自动生成缩略图 |
+| 全屏查看 | 点击图片进入全屏查看器 |
+| 键盘导航 | 支持 ESC 关闭，←/→ 切换图片 |
+| 缩略图导航 | 底部缩略图条快速跳转 |
+| 图片计数 | 显示当前图片位置 (1/N) |
 
 ---
 
@@ -464,4 +472,4 @@ Wails 应用配置，定义应用名称、前端命令、输出文件名等。
 
 ---
 
-*最后更新：2025-04-09*
+*最后更新：2026-04-09*
