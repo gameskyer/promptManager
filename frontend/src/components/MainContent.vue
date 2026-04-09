@@ -54,6 +54,7 @@
         :is-selected="isSelected(atom.id)"
         @toggle="toggleAtom(atom)"
         @add="addAtom(atom)"
+        @add-synonym="addSynonym"
         @edit="editAtom(atom)"
       />
       
@@ -177,6 +178,14 @@ function toggleAtom(atom) {
 function addAtom(atom) {
   appStore.addAtom(atom)
   atomStore.recordUsage(atom.id)
+}
+
+function addSynonym(synonymAtom) {
+  appStore.addAtom(synonymAtom)
+  // 如果是已有原子词，记录使用
+  if (synonymAtom.id) {
+    atomStore.recordUsage(synonymAtom.id)
+  }
 }
 
 function selectSubCategory(sub) {

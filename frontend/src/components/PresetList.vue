@@ -365,14 +365,31 @@ async function updateThumbnail(presetId, thumbnailUrl, newPreviews = null) {
     presetId,
     thumbnailUrl: thumbnailUrl?.substring(0, 50),
     newPreviews: newPreviews?.map(p => p?.substring(0, 50)),
+    existingPreviews: preset.previews?.map(p => p?.substring(0, 50)),
   })
   
   try {
+    // 如果没有传入 newPreviews，只是切换当前显示的封面图
+    // 保持原有的 previews 列表不变
+    if (!newPreviews) {
+      // 只更新封面图（thumbnail），保持 previews 不变
+      preset.thumbnail = thumbnailUrl
+      
+      // 保存到后端（只更新封面图）
+      await versionStore.updateVersionPreview(presetId, thumbnailUrl, preset.previews)
+      
+      console.log('[PresetList] updateThumbnail (switch only):', {
+        thumbnailUrl,
+        previews: preset.previews,
+      })
+      return
+    }
+    
     // 处理新上传的图片（data URL 格式）
     const newImages = []
     const existingPaths = []
     
-    for (const p of newPreviews || []) {
+    for (const p of newPreviews) {
       if (p && p.startsWith('data:')) {
         newImages.push(p)
       } else if (p && p.startsWith('/images/')) {

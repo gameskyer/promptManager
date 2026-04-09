@@ -11,7 +11,19 @@
         {{ atom.type === 'Positive' ? '正' : '负' }}
       </div>
       <div class="header-actions">
-        <button class="edit-btn" @click.stop="$emit('edit', atom)">
+        <!-- 复制按钮 -->
+        <button 
+          class="header-btn copy-btn" 
+          @click.stop="copyAtomContent"
+          title="复制内容"
+        >
+          <ClipboardDocumentIcon class="w-3 h-3" />
+        </button>
+        <button 
+          class="header-btn edit-btn" 
+          @click.stop="$emit('edit', atom)"
+          title="编辑"
+        >
           <PencilIcon class="w-3 h-3" />
         </button>
       </div>
@@ -22,19 +34,40 @@
       <div class="atom-label">{{ atom.label }}</div>
     </div>
     
-    <!-- 近义词区域 -->
-    <div v-if="atom.synonyms?.length > 0" class="card-footer" @click="handleClick">
-      <div class="synonyms" @click.stop="handleSynonymsClick">
-        <span 
+    <!-- 近义词区域 - 每行显示一个 -->
+    <div v-if="atom.synonyms?.length > 0" class="card-footer">
+      <div class="synonyms-list">
+        <div 
           v-for="(syn, index) in displayedSynonyms" 
           :key="index"
-          class="synonym-tag"
+          class="synonym-row"
         >
-          {{ syn }}
-        </span>
-        <span v-if="hasMoreSynonyms" class="synonym-more">
-          +{{ remainingCount }}
-        </span>
+          <span 
+            class="synonym-text"
+            @click.stop="addSynonym(syn)"
+            title="点击添加"
+          >
+            {{ syn }}
+          </span>
+          <button 
+            class="synonym-copy-btn"
+            @click.stop="copyText(syn)"
+            title="复制"
+          >
+            <ClipboardDocumentIcon class="w-3 h-3" />
+          </button>
+        </div>
+        <!-- 查看更多按钮 -->
+        <div 
+          v-if="hasMoreSynonyms" 
+          class="synonym-row more-row"
+          @click.stop="showSynonymsModal = true"
+        >
+          <span class="synonym-more-text">
+            查看更多 (+{{ remainingCount }})
+          </span>
+          <ChevronDownIcon class="w-3 h-3 more-icon" />
+        </div>
       </div>
     </div>
     
@@ -72,15 +105,38 @@
           </button>
         </div>
         <div class="synonyms-modal-body">
+          <!-- 原词信息 -->
           <div class="synonym-item main">
             <span class="label">原词</span>
             <span class="value">{{ atom.value }}</span>
+            <button 
+              class="item-copy-btn"
+              @click="copyText(atom.value)"
+              title="复制"
+            >
+              <ClipboardDocumentIcon class="w-3 h-3" />
+            </button>
+            <button 
+              class="item-add-btn"
+              @click="addAtom(atom)"
+              title="添加"
+            >
+              <PlusIcon class="w-3 h-3" />
+            </button>
           </div>
           <div class="synonym-item main">
             <span class="label">中文</span>
             <span class="value">{{ atom.label }}</span>
+            <button 
+              class="item-copy-btn"
+              @click="copyText(atom.label)"
+              title="复制"
+            >
+              <ClipboardDocumentIcon class="w-3 h-3" />
+            </button>
           </div>
           <div class="synonyms-divider"></div>
+          <!-- 所有近义词列表 -->
           <div 
             v-for="(syn, index) in atom.synonyms" 
             :key="index"
@@ -88,16 +144,43 @@
           >
             <span class="label">{{ index + 1 }}</span>
             <span class="value">{{ syn }}</span>
+            <button 
+              class="item-copy-btn"
+              @click="copyText(syn)"
+              title="复制"
+            >
+              <ClipboardDocumentIcon class="w-3 h-3" />
+            </button>
+            <button 
+              class="item-add-btn"
+              @click="addSynonym(syn)"
+              title="添加"
+            >
+              <PlusIcon class="w-3 h-3" />
+            </button>
           </div>
         </div>
       </div>
+    </div>
+    
+    <!-- 复制成功提示 -->
+    <div v-if="showCopyToast" class="copy-toast">
+      <CheckIcon class="w-4 h-4" />
+      <span>已复制</span>
     </div>
   </div>
 </template>
 
 <script setup>
 import { ref, computed } from 'vue'
-import { PlusIcon, CheckIcon, PencilIcon, XMarkIcon } from '@heroicons/vue/24/solid'
+import { 
+  PlusIcon, 
+  CheckIcon, 
+  PencilIcon, 
+  XMarkIcon,
+  ClipboardDocumentIcon,
+  ChevronDownIcon
+} from '@heroicons/vue/24/solid'
 
 const props = defineProps({
   atom: {
@@ -114,9 +197,10 @@ const props = defineProps({
   },
 })
 
-const emit = defineEmits(['toggle', 'add', 'remove', 'edit'])
+const emit = defineEmits(['toggle', 'add', 'remove', 'edit', 'add-synonym'])
 
 const showSynonymsModal = ref(false)
+const showCopyToast = ref(false)
 const MAX_SYNONYMS_DISPLAY = 3
 
 // 显示的近义词（最多3条）
@@ -148,10 +232,52 @@ function handleRemove() {
   emit('remove', props.atom.id)
 }
 
-function handleSynonymsClick() {
-  if (hasMoreSynonyms.value) {
-    showSynonymsModal.value = true
+function addAtom(atom) {
+  emit('add', atom)
+}
+
+function addSynonym(synonym) {
+  // 创建一个临时的原子词对象，用于添加
+  const synonymAtom = {
+    ...props.atom,
+    value: synonym,
+    label: synonym,
   }
+  emit('add-synonym', synonymAtom)
+  emit('add', synonymAtom)
+}
+
+// 复制文本到剪贴板
+async function copyText(text) {
+  try {
+    await navigator.clipboard.writeText(text)
+    showCopyToastMessage()
+  } catch (err) {
+    // 降级方案
+    const textarea = document.createElement('textarea')
+    textarea.value = text
+    textarea.style.position = 'fixed'
+    textarea.style.opacity = '0'
+    document.body.appendChild(textarea)
+    textarea.select()
+    document.execCommand('copy')
+    document.body.removeChild(textarea)
+    showCopyToastMessage()
+  }
+}
+
+// 复制原子词完整内容
+function copyAtomContent() {
+  const content = `${props.atom.value} (${props.atom.label})`
+  copyText(content)
+}
+
+// 显示复制成功提示
+function showCopyToastMessage() {
+  showCopyToast.value = true
+  setTimeout(() => {
+    showCopyToast.value = false
+  }, 1500)
 }
 </script>
 
@@ -165,7 +291,6 @@ function handleSynonymsClick() {
   cursor: pointer;
   transition: all 0.2s ease;
   overflow: hidden;
-  /* 高度自适应 */
   height: auto;
   display: flex;
   flex-direction: column;
@@ -215,10 +340,10 @@ function handleSynonymsClick() {
 .header-actions {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
 }
 
-.edit-btn {
+.header-btn {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -233,19 +358,24 @@ function handleSynonymsClick() {
   transition: all 0.2s;
 }
 
-.atom-card:hover .edit-btn {
+.atom-card:hover .header-btn {
   opacity: 1;
 }
 
-.edit-btn:hover {
+.header-btn:hover {
   background-color: #334155;
   color: #e2e8f0;
+}
+
+.header-btn.copy-btn:hover {
+  background-color: rgba(14, 165, 233, 0.2);
+  color: #0ea5e9;
 }
 
 .card-body {
   flex: 1;
   min-height: 0;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -279,36 +409,86 @@ function handleSynonymsClick() {
   flex-shrink: 0;
 }
 
-.synonyms {
+/* 近义词列表 - 每行一个 */
+.synonyms-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.synonym-row {
   display: flex;
   align-items: center;
-  gap: 4px;
-  flex-wrap: wrap;
-}
-
-.synonym-tag {
-  font-size: 10px;
-  color: #64748b;
-  background-color: rgba(255, 255, 255, 0.05);
-  padding: 2px 6px;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 4px 6px;
   border-radius: 4px;
-  white-space: nowrap;
-}
-
-.synonym-more {
-  font-size: 10px;
-  color: #0ea5e9;
-  background-color: rgba(14, 165, 233, 0.15);
-  padding: 2px 6px;
-  border-radius: 4px;
-  cursor: pointer;
+  background-color: rgba(255, 255, 255, 0.03);
   transition: all 0.2s;
-  white-space: nowrap;
 }
 
-.synonym-more:hover {
-  background-color: rgba(14, 165, 233, 0.25);
+.synonym-row:hover {
+  background-color: rgba(255, 255, 255, 0.06);
+}
+
+.synonym-row.more-row {
+  justify-content: center;
+  background-color: rgba(14, 165, 233, 0.1);
+  cursor: pointer;
+}
+
+.synonym-row.more-row:hover {
+  background-color: rgba(14, 165, 233, 0.2);
+}
+
+.synonym-text {
+  flex: 1;
+  font-size: 11px;
+  color: #94a3b8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+
+.synonym-text:hover {
   color: #38bdf8;
+}
+
+.synonym-copy-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 3px;
+  background-color: transparent;
+  border: none;
+  color: #64748b;
+  cursor: pointer;
+  opacity: 0;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.synonym-row:hover .synonym-copy-btn {
+  opacity: 1;
+}
+
+.synonym-copy-btn:hover {
+  background-color: #334155;
+  color: #0ea5e9;
+}
+
+.synonym-more-text {
+  font-size: 11px;
+  color: #0ea5e9;
+  font-weight: 500;
+}
+
+.more-icon {
+  color: #0ea5e9;
 }
 
 .card-actions {
@@ -372,8 +552,11 @@ function handleSynonymsClick() {
   background-color: #0f172a;
   border: 1px solid #334155;
   border-radius: 8px;
-  min-width: 240px;
-  max-width: 320px;
+  min-width: 280px;
+  max-width: 360px;
+  max-height: 400px;
+  display: flex;
+  flex-direction: column;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
 }
 
@@ -381,12 +564,13 @@ function handleSynonymsClick() {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 12px;
+  padding: 12px 14px;
   border-bottom: 1px solid #334155;
+  flex-shrink: 0;
 }
 
 .synonyms-modal-header span {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   color: #e2e8f0;
 }
@@ -411,9 +595,9 @@ function handleSynonymsClick() {
 }
 
 .synonyms-modal-body {
-  padding: 8px;
-  max-height: 240px;
+  padding: 10px;
   overflow-y: auto;
+  flex: 1;
 }
 
 .synonym-item {
@@ -421,22 +605,28 @@ function handleSynonymsClick() {
   align-items: center;
   gap: 10px;
   padding: 8px 10px;
-  border-radius: 4px;
+  border-radius: 6px;
+  transition: background-color 0.2s;
 }
 
 .synonym-item:hover {
-  background-color: rgba(255, 255, 255, 0.03);
+  background-color: rgba(255, 255, 255, 0.05);
 }
 
 .synonym-item.main {
-  background-color: rgba(14, 165, 233, 0.1);
+  background-color: rgba(14, 165, 233, 0.08);
   margin-bottom: 4px;
+}
+
+.synonym-item.main:hover {
+  background-color: rgba(14, 165, 233, 0.15);
 }
 
 .synonym-item .label {
   font-size: 11px;
   color: #64748b;
   min-width: 32px;
+  flex-shrink: 0;
 }
 
 .synonym-item.main .label {
@@ -445,13 +635,77 @@ function handleSynonymsClick() {
 }
 
 .synonym-item .value {
+  flex: 1;
   font-size: 13px;
   color: #e2e8f0;
+  word-break: break-all;
+}
+
+.item-copy-btn,
+.item-add-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  background-color: transparent;
+  border: none;
+  color: #64748b;
+  cursor: pointer;
+  opacity: 0;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.synonym-item:hover .item-copy-btn,
+.synonym-item:hover .item-add-btn {
+  opacity: 1;
+}
+
+.item-copy-btn:hover {
+  background-color: #334155;
+  color: #0ea5e9;
+}
+
+.item-add-btn:hover {
+  background-color: #334155;
+  color: #22c55e;
 }
 
 .synonyms-divider {
   height: 1px;
   background-color: #334155;
-  margin: 6px 0;
+  margin: 8px 0;
+}
+
+/* 复制成功提示 */
+.copy-toast {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background-color: rgba(34, 197, 94, 0.9);
+  border-radius: 6px;
+  color: white;
+  font-size: 13px;
+  font-weight: 500;
+  z-index: 50;
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
 }
 </style>

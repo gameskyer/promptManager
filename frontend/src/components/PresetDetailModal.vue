@@ -14,24 +14,29 @@
       <div class="modal-body">
         <!-- 图片预览区 -->
         <div class="image-preview-section">
-          <div class="main-preview">
+          <div class="main-preview" @click="openImageViewer(currentImageIndex)">
             <img v-if="currentImage" :src="currentImage" :alt="preset.title" />
             <div v-else class="no-image">
               <PhotoIcon class="w-16 h-16 text-slate-600" />
               <span>暂无预览图</span>
             </div>
+            <!-- 查看大图提示 -->
+            <div v-if="currentImage" class="view-image-overlay">
+              <EyeIcon class="w-6 h-6" />
+              <span>点击查看大图</span>
+            </div>
           </div>
           
           <!-- 缩略图列表 -->
-          <div v-if="preset.previews?.length > 0" class="thumbnail-list">
+          <div v-if="allImages.length > 0" class="thumbnail-list">
             <div 
-              v-for="(preview, index) in preset.previews" 
+              v-for="(img, index) in allImages" 
               :key="index"
               class="thumb-item"
               :class="{ active: currentImageIndex === index }"
               @click="currentImageIndex = index"
             >
-              <img :src="preview" :alt="`预览 ${index + 1}`" />
+              <img :src="img" :alt="`预览 ${index + 1}`" />
             </div>
           </div>
         </div>
@@ -138,11 +143,72 @@
         </button>
       </div>
     </div>
+    
+    <!-- 图片查看器弹窗 -->
+    <div 
+      v-if="showImageViewer" 
+      class="image-viewer-modal"
+      @click="closeImageViewer"
+    >
+      <div class="image-viewer-content" @click.stop>
+        <!-- 关闭按钮 -->
+        <button class="viewer-close-btn" @click="closeImageViewer">
+          <XMarkIcon class="w-6 h-6" />
+        </button>
+        
+        <!-- 图片计数器 -->
+        <div v-if="allImages.length > 1" class="image-counter">
+          {{ viewerCurrentIndex + 1 }} / {{ allImages.length }}
+        </div>
+        
+        <!-- 左切换按钮 -->
+        <button 
+          v-if="allImages.length > 1"
+          class="nav-btn prev-btn"
+          :class="{ disabled: viewerCurrentIndex === 0 }"
+          @click.stop="prevImage"
+        >
+          <ChevronLeftIcon class="w-8 h-8" />
+        </button>
+        
+        <!-- 主图片显示 -->
+        <div class="viewer-image-wrapper">
+          <img 
+            :src="allImages[viewerCurrentIndex]" 
+            :alt="`预览图 ${viewerCurrentIndex + 1}`"
+            @click.stop
+          />
+        </div>
+        
+        <!-- 右切换按钮 -->
+        <button 
+          v-if="allImages.length > 1"
+          class="nav-btn next-btn"
+          :class="{ disabled: viewerCurrentIndex === allImages.length - 1 }"
+          @click.stop="nextImage"
+        >
+          <ChevronRightIcon class="w-8 h-8" />
+        </button>
+        
+        <!-- 底部缩略图列表 -->
+        <div v-if="allImages.length > 1" class="viewer-thumbnails">
+          <div 
+            v-for="(img, index) in allImages" 
+            :key="index"
+            class="viewer-thumb"
+            :class="{ active: viewerCurrentIndex === index }"
+            @click.stop="viewerCurrentIndex = index"
+          >
+            <img :src="img" :alt="`缩略图 ${index + 1}`" />
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import {
   XMarkIcon,
   PhotoIcon,
@@ -152,6 +218,9 @@ import {
   SquaresPlusIcon,
   ClockIcon,
   ClipboardDocumentListIcon,
+  EyeIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
 } from '@heroicons/vue/24/outline'
 
 const props = defineProps({
@@ -165,9 +234,29 @@ const emit = defineEmits(['close', 'edit', 'use', 'view-history'])
 
 const currentImageIndex = ref(0)
 
-const currentImage = computed(() => {
+// 图片查看器状态
+const showImageViewer = ref(false)
+const viewerCurrentIndex = ref(0)
+
+// 所有图片列表
+const allImages = computed(() => {
+  const images = []
+  if (props.preset.thumbnail) {
+    images.push(props.preset.thumbnail)
+  }
   if (props.preset.previews?.length > 0) {
-    return props.preset.previews[currentImageIndex.value]
+    props.preset.previews.forEach(preview => {
+      if (preview !== props.preset.thumbnail) {
+        images.push(preview)
+      }
+    })
+  }
+  return images
+})
+
+const currentImage = computed(() => {
+  if (allImages.value.length > 0) {
+    return allImages.value[currentImageIndex.value]
   }
   return props.preset.thumbnail
 })
@@ -229,6 +318,60 @@ function showToast(message) {
     setTimeout(() => toast.remove(), 300)
   }, 2000)
 }
+
+function showCopySuccess() {
+  showToast('已复制到剪贴板')
+}
+
+// ========== 图片查看器功能 ==========
+
+function openImageViewer(index = 0) {
+  if (allImages.value.length === 0) return
+  viewerCurrentIndex.value = index
+  showImageViewer.value = true
+  document.body.style.overflow = 'hidden'
+  document.addEventListener('keydown', handleKeydown)
+}
+
+function closeImageViewer() {
+  showImageViewer.value = false
+  document.body.style.overflow = ''
+  document.removeEventListener('keydown', handleKeydown)
+}
+
+function prevImage() {
+  if (viewerCurrentIndex.value > 0) {
+    viewerCurrentIndex.value--
+  }
+}
+
+function nextImage() {
+  if (viewerCurrentIndex.value < allImages.value.length - 1) {
+    viewerCurrentIndex.value++
+  }
+}
+
+function handleKeydown(e) {
+  if (!showImageViewer.value) return
+  
+  switch (e.key) {
+    case 'Escape':
+      closeImageViewer()
+      break
+    case 'ArrowLeft':
+      prevImage()
+      break
+    case 'ArrowRight':
+      nextImage()
+      break
+  }
+}
+
+// 清理
+onUnmounted(() => {
+  document.removeEventListener('keydown', handleKeydown)
+  document.body.style.overflow = ''
+})
 </script>
 
 <style scoped>
@@ -331,12 +474,40 @@ function showToast(message) {
   display: flex;
   align-items: center;
   justify-content: center;
+  position: relative;
+  cursor: pointer;
 }
 
 .main-preview img {
   width: 100%;
   height: 100%;
   object-fit: contain;
+  transition: transform 0.3s ease;
+}
+
+.main-preview:hover img {
+  transform: scale(1.02);
+}
+
+/* 查看大图提示 */
+.view-image-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background-color: rgba(0, 0, 0, 0.5);
+  color: white;
+  font-size: 14px;
+  font-weight: 500;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.main-preview:hover .view-image-overlay {
+  opacity: 1;
 }
 
 .no-image {
@@ -654,6 +825,169 @@ function showToast(message) {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
+/* ========== 图片查看器样式 ========== */
+.image-viewer-modal {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.95);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.image-viewer-content {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.viewer-close-btn {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background-color: rgba(255, 255, 255, 0.1);
+  border: none;
+  color: white;
+  cursor: pointer;
+  transition: all 0.2s;
+  z-index: 10;
+}
+
+.viewer-close-btn:hover {
+  background-color: rgba(255, 255, 255, 0.2);
+  transform: scale(1.1);
+}
+
+.image-counter {
+  position: absolute;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 8px 16px;
+  background-color: rgba(0, 0, 0, 0.6);
+  border-radius: 20px;
+  color: white;
+  font-size: 14px;
+  font-weight: 500;
+  z-index: 10;
+}
+
+.viewer-image-wrapper {
+  flex: 1;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 80px;
+  box-sizing: border-box;
+}
+
+.viewer-image-wrapper img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: 8px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+.nav-btn {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 50px;
+  height: 80px;
+  background-color: rgba(255, 255, 255, 0.1);
+  border: none;
+  color: white;
+  cursor: pointer;
+  transition: all 0.2s;
+  border-radius: 8px;
+}
+
+.nav-btn:hover:not(.disabled) {
+  background-color: rgba(255, 255, 255, 0.2);
+}
+
+.nav-btn.disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.prev-btn {
+  left: 20px;
+}
+
+.next-btn {
+  right: 20px;
+}
+
+.viewer-thumbnails {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 10px;
+  padding: 12px;
+  background-color: rgba(0, 0, 0, 0.6);
+  border-radius: 12px;
+  max-width: 80%;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.viewer-thumbnails::-webkit-scrollbar {
+  display: none;
+}
+
+.viewer-thumb {
+  flex-shrink: 0;
+  width: 60px;
+  height: 60px;
+  border-radius: 6px;
+  overflow: hidden;
+  cursor: pointer;
+  border: 2px solid transparent;
+  opacity: 0.6;
+  transition: all 0.2s;
+}
+
+.viewer-thumb:hover {
+  opacity: 0.9;
+  transform: scale(1.05);
+}
+
+.viewer-thumb.active {
+  border-color: #0ea5e9;
+  opacity: 1;
+}
+
+.viewer-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
 @media (max-width: 768px) {
   .modal-body {
     grid-template-columns: 1fr;
@@ -662,6 +996,23 @@ function showToast(message) {
   .image-preview-section {
     border-right: none;
     border-bottom: 1px solid #334155;
+  }
+  
+  .viewer-image-wrapper {
+    padding: 60px 60px;
+  }
+  
+  .nav-btn {
+    width: 40px;
+    height: 60px;
+  }
+  
+  .prev-btn {
+    left: 10px;
+  }
+  
+  .next-btn {
+    right: 10px;
   }
 }
 </style>

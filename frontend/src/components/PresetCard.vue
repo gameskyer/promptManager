@@ -2,10 +2,17 @@
   <div class="preset-card" :class="{ 'compact-mode': isCompact }">
     <!-- 封面图区域 - 非紧凑模式下显示 -->
     <div v-if="!isCompact" class="card-cover">
-      <img v-if="preset.thumbnail" :src="preset.thumbnail" :alt="preset.title" />
-      <div v-else class="cover-placeholder">
-        <PhotoIcon class="w-12 h-12 text-slate-600" />
-        <span>暂无封面</span>
+      <div class="cover-image-wrapper" @click="openImageViewer">
+        <img v-if="preset.thumbnail" :src="preset.thumbnail" :alt="preset.title" />
+        <div v-else class="cover-placeholder">
+          <PhotoIcon class="w-12 h-12 text-slate-600" />
+          <span>暂无封面</span>
+        </div>
+        <!-- 查看大图提示 -->
+        <div v-if="preset.thumbnail" class="view-image-hint">
+          <EyeIcon class="w-5 h-5" />
+          <span>查看大图</span>
+        </div>
       </div>
       
       <!-- 缩略图预览条（横向滚动） -->
@@ -120,7 +127,71 @@
         <TrashIcon class="w-4 h-4" />
       </button>
     </div>
+    
   </div>
+  
+  <!-- 图片查看器弹窗 - 使用 Teleport 传送到 body，避免被卡片样式影响 -->
+  <Teleport to="body">
+    <div 
+      v-if="showImageViewer" 
+      class="image-viewer-modal"
+      @click="closeImageViewer"
+    >
+      <div class="image-viewer-content" @click.stop>
+        <!-- 关闭按钮 -->
+        <button class="viewer-close-btn" @click="closeImageViewer">
+          <XMarkIcon class="w-6 h-6" />
+        </button>
+        
+        <!-- 图片计数器 -->
+        <div v-if="allImages.length > 1" class="image-counter">
+          {{ viewerCurrentIndex + 1 }} / {{ allImages.length }}
+        </div>
+        
+        <!-- 左切换按钮 -->
+        <button 
+          v-if="allImages.length > 1"
+          class="nav-btn prev-btn"
+          :class="{ disabled: viewerCurrentIndex === 0 }"
+          @click.stop="prevImage"
+        >
+          <ChevronLeftIcon class="w-8 h-8" />
+        </button>
+        
+        <!-- 主图片显示 -->
+        <div class="viewer-image-wrapper">
+          <img 
+            :src="allImages[viewerCurrentIndex]" 
+            :alt="`预览图 ${viewerCurrentIndex + 1}`"
+            @click.stop
+          />
+        </div>
+        
+        <!-- 右切换按钮 -->
+        <button 
+          v-if="allImages.length > 1"
+          class="nav-btn next-btn"
+          :class="{ disabled: viewerCurrentIndex === allImages.length - 1 }"
+          @click.stop="nextImage"
+        >
+          <ChevronRightIcon class="w-8 h-8" />
+        </button>
+        
+        <!-- 底部缩略图列表 -->
+        <div v-if="allImages.length > 1" class="viewer-thumbnails">
+          <div 
+            v-for="(img, index) in allImages" 
+            :key="index"
+            class="viewer-thumb"
+            :class="{ active: viewerCurrentIndex === index }"
+            @click.stop="viewerCurrentIndex = index"
+          >
+            <img :src="img" :alt="`缩略图 ${index + 1}`" />
+          </div>
+        </div>
+      </div>
+    </div>
+  </Teleport>
 </template>
 
 <script setup>
@@ -138,6 +209,9 @@ import {
   TrashIcon,
   CubeIcon,
   SquaresPlusIcon,
+  XMarkIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
 } from '@heroicons/vue/24/outline'
 
 const props = defineProps({
@@ -163,6 +237,10 @@ const emit = defineEmits(['view', 'edit', 'use', 'delete', 'update-thumbnail'])
 const currentPreviewIndex = ref(0)
 const isCompact = ref(false)
 const COMPACT_THRESHOLD = 1100 // 窗口宽度小于此值进入紧凑模式
+
+// 图片查看器状态
+const showImageViewer = ref(false)
+const viewerCurrentIndex = ref(0)
 
 const MAX_LORAS_DISPLAY = 2
 
@@ -205,6 +283,25 @@ const truncatedNegText = computed(() => {
   const text = props.preset.neg_text || ''
   const maxLen = isCompact.value ? 100 : 80
   return text.length > maxLen ? text.slice(0, maxLen) + '...' : text
+})
+
+// 所有图片列表（包括缩略图和预览图）
+const allImages = computed(() => {
+  const images = []
+  // 如果有 thumbnail，放在第一位
+  if (props.preset.thumbnail) {
+    images.push(props.preset.thumbnail)
+  }
+  // 添加所有预览图
+  if (props.preset.previews?.length > 0) {
+    props.preset.previews.forEach(preview => {
+      // 避免重复添加 thumbnail
+      if (preview !== props.preset.thumbnail) {
+        images.push(preview)
+      }
+    })
+  }
+  return images
 })
 
 function formatModelName(modelPath) {
@@ -252,6 +349,57 @@ function addPreview() {
 function handleDelete() {
   if (confirm(`确定要删除预设 "${props.preset.title}" 吗？`)) {
     emit('delete', props.preset.id)
+  }
+}
+
+// ========== 图片查看器功能 ==========
+
+function openImageViewer() {
+  if (!props.preset.thumbnail && !props.preset.previews?.length) {
+    return
+  }
+  // 从当前选中的缩略图索引开始
+  viewerCurrentIndex.value = currentPreviewIndex.value
+  showImageViewer.value = true
+  // 禁止背景滚动
+  document.body.style.overflow = 'hidden'
+  // 添加键盘事件监听
+  document.addEventListener('keydown', handleKeydown)
+}
+
+function closeImageViewer() {
+  showImageViewer.value = false
+  // 恢复背景滚动
+  document.body.style.overflow = ''
+  // 移除键盘事件监听
+  document.removeEventListener('keydown', handleKeydown)
+}
+
+function prevImage() {
+  if (viewerCurrentIndex.value > 0) {
+    viewerCurrentIndex.value--
+  }
+}
+
+function nextImage() {
+  if (viewerCurrentIndex.value < allImages.value.length - 1) {
+    viewerCurrentIndex.value++
+  }
+}
+
+function handleKeydown(e) {
+  if (!showImageViewer.value) return
+  
+  switch (e.key) {
+    case 'Escape':
+      closeImageViewer()
+      break
+    case 'ArrowLeft':
+      prevImage()
+      break
+    case 'ArrowRight':
+      nextImage()
+      break
   }
 }
 </script>
@@ -327,10 +475,44 @@ function handleDelete() {
   overflow: hidden;
 }
 
-.card-cover img {
+.cover-image-wrapper {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.cover-image-wrapper img {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  transition: transform 0.3s ease;
+}
+
+.cover-image-wrapper:hover img {
+  transform: scale(1.05);
+}
+
+/* 查看大图提示 */
+.view-image-hint {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background-color: rgba(0, 0, 0, 0.6);
+  color: white;
+  font-size: 13px;
+  font-weight: 500;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.cover-image-wrapper:hover .view-image-hint {
+  opacity: 1;
 }
 
 .cover-placeholder {
@@ -637,5 +819,173 @@ function handleDelete() {
 .action-btn.delete:hover {
   color: #ef4444;
   background-color: rgba(239, 68, 68, 0.1);
+}
+
+/* ========== 图片查看器样式 ========== */
+.image-viewer-modal {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.image-viewer-content {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+/* 关闭按钮 */
+.viewer-close-btn {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background-color: rgba(255, 255, 255, 0.1);
+  border: none;
+  color: white;
+  cursor: pointer;
+  transition: all 0.2s;
+  z-index: 10;
+}
+
+.viewer-close-btn:hover {
+  background-color: rgba(255, 255, 255, 0.2);
+  transform: scale(1.1);
+}
+
+/* 图片计数器 */
+.image-counter {
+  position: absolute;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 8px 16px;
+  background-color: rgba(0, 0, 0, 0.6);
+  border-radius: 20px;
+  color: white;
+  font-size: 14px;
+  font-weight: 500;
+  z-index: 10;
+}
+
+/* 主图片区域 */
+.viewer-image-wrapper {
+  flex: 1;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 80px;
+  box-sizing: border-box;
+}
+
+.viewer-image-wrapper img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: 8px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+/* 导航按钮 */
+.nav-btn {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 50px;
+  height: 80px;
+  background-color: rgba(255, 255, 255, 0.1);
+  border: none;
+  color: white;
+  cursor: pointer;
+  transition: all 0.2s;
+  border-radius: 8px;
+}
+
+.nav-btn:hover:not(.disabled) {
+  background-color: rgba(255, 255, 255, 0.2);
+}
+
+.nav-btn.disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.prev-btn {
+  left: 20px;
+}
+
+.next-btn {
+  right: 20px;
+}
+
+/* 底部缩略图 */
+.viewer-thumbnails {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 10px;
+  padding: 12px;
+  background-color: rgba(0, 0, 0, 0.6);
+  border-radius: 12px;
+  max-width: 80%;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.viewer-thumbnails::-webkit-scrollbar {
+  display: none;
+}
+
+.viewer-thumb {
+  flex-shrink: 0;
+  width: 60px;
+  height: 60px;
+  border-radius: 6px;
+  overflow: hidden;
+  cursor: pointer;
+  border: 2px solid transparent;
+  opacity: 0.6;
+  transition: all 0.2s;
+}
+
+.viewer-thumb:hover {
+  opacity: 0.9;
+  transform: scale(1.05);
+}
+
+.viewer-thumb.active {
+  border-color: #0ea5e9;
+  opacity: 1;
+}
+
+.viewer-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 </style>
