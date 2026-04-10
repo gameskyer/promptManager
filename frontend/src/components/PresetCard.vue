@@ -486,7 +486,7 @@ function handleKeydown(e) {
 .cover-image-wrapper img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
   transition: transform 0.3s ease;
 }
 
@@ -571,7 +571,7 @@ function handleKeydown(e) {
 .preview-thumb img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
 }
 
 /* 添加预览按钮 */
