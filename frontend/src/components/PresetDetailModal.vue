@@ -468,6 +468,7 @@ onUnmounted(() => {
 .main-preview {
   flex: 1;
   min-height: 300px;
+  max-height: 500px;
   background-color: #1e293b;
   border-radius: 12px;
   overflow: hidden;
