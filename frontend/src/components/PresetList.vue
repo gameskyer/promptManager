@@ -195,7 +195,13 @@ function createPreset() {
 }
 
 function editPreset(preset) {
-  editingPreset.value = preset
+  // 创建副本以避免直接修改原始对象（会破坏响应式）
+  editingPreset.value = {
+    ...preset,
+    params: { ...preset.params },
+    loras: preset.loras ? [...preset.loras] : [],
+    previews: preset.previews ? [...preset.previews] : [],
+  }
   showPresetDialog.value = true
   viewingPreset.value = null
 }
@@ -347,7 +353,13 @@ async function deletePreset(id) {
 }
 
 function viewPreset(preset) {
-  viewingPreset.value = preset
+  // 创建副本以避免直接修改原始对象
+  viewingPreset.value = {
+    ...preset,
+    params: { ...preset.params },
+    loras: preset.loras ? [...preset.loras] : [],
+    previews: preset.previews ? [...preset.previews] : [],
+  }
 }
 
 function usePreset(preset) {
