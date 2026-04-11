@@ -113,15 +113,19 @@
             <div class="params-grid">
               <div class="param-row">
                 <span class="param-name">采样步数</span>
-                <span class="param-value">{{ preset.params?.steps || 30 }}</span>
+                <span class="param-value">{{ preset.params?.steps ?? 30 }}</span>
               </div>
               <div class="param-row">
                 <span class="param-name">CFG Scale</span>
-                <span class="param-value">{{ preset.params?.cfg || 7 }}</span>
+                <span class="param-value">{{ preset.params?.cfg ?? 7 }}</span>
               </div>
               <div class="param-row">
                 <span class="param-name">采样器</span>
                 <span class="param-value">{{ preset.params?.sampler || 'DPM++ 2M Karras' }}</span>
+              </div>
+              <div class="param-row">
+                <span class="param-name">随机种子</span>
+                <span class="param-value">{{ preset.params?.seed ?? -1 }}</span>
               </div>
             </div>
           </div>

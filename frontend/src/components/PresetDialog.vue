@@ -180,15 +180,24 @@
             </div>
           </div>
           
-          <div class="form-group">
-            <label>采样器 (Sampler)</label>
-            <select v-model="form.params.sampler">
-              <option value="Euler">Euler</option>
-              <option value="Euler a">Euler a</option>
-              <option value="DPM++ 2M">DPM++ 2M</option>
-              <option value="DPM++ 2M Karras">DPM++ 2M Karras</option>
-              <option value="DDIM">DDIM</option>
-            </select>
+          <div class="form-row">
+            <div class="form-group" style="flex: 1.5;">
+              <label>采样器 (Sampler)</label>
+              <input 
+                v-model="form.params.sampler" 
+                type="text" 
+                placeholder="如：DPM++ 2M Karras"
+              />
+            </div>
+            
+            <div class="form-group" style="flex: 1;">
+              <label>随机种子 (Seed)</label>
+              <input 
+                v-model.number="form.params.seed" 
+                type="number"
+                placeholder="-1 表示随机"
+              />
+            </div>
           </div>
         </form>
       </div>
@@ -264,6 +273,8 @@ const form = ref({
     steps: 30,
     cfg: 7,
     sampler: 'DPM++ 2M Karras',
+    scheduler: 'karras',
+    seed: -1,
     model: '',
   },
   loras: [],
@@ -292,6 +303,8 @@ watch(() => props.preset, (newPreset) => {
         steps: newPreset.params?.steps ?? 30,
         cfg: newPreset.params?.cfg ?? 7,
         sampler: newPreset.params?.sampler || 'DPM++ 2M Karras',
+        scheduler: newPreset.params?.scheduler || 'karras',
+        seed: newPreset.params?.seed ?? -1,
         model: newPreset.params?.model || '',
       },
       loras: newPreset.loras?.length > 0 
@@ -316,6 +329,8 @@ watch(() => props.preset, (newPreset) => {
         steps: 30,
         cfg: 7,
         sampler: 'DPM++ 2M Karras',
+        scheduler: 'karras',
+        seed: -1,
         model: '',
       },
       loras: [],
@@ -404,9 +419,19 @@ async function importComfyUIFile() {
       
       // 更新参数
       if (parsed.params) {
-        form.value.params.steps = parsed.params.steps || 30
-        form.value.params.cfg = parsed.params.cfg || 7
+        form.value.params.steps = parsed.params.steps ?? 30
+        form.value.params.cfg = parsed.params.cfg ?? 7
         form.value.params.sampler = parsed.params.sampler || 'DPM++ 2M Karras'
+        form.value.params.scheduler = parsed.params.scheduler || 'karras'
+        form.value.params.seed = parsed.params.seed ?? -1
+      }
+      
+      // 更新 LoRA（如果解析到了）
+      if (parsed.loras && parsed.loras.length > 0) {
+        form.value.loras = parsed.loras.map(l => ({
+          name: l.name || '',
+          weight: l.weight ?? 1.0
+        }))
       }
       
       // 如果没有标题，尝试从文件名生成
@@ -415,7 +440,10 @@ async function importComfyUIFile() {
         form.value.title = fileName
       }
       
-      alert('导入成功！已自动填充提示词和参数')
+      const importMsg = parsed.loras?.length > 0 
+        ? `导入成功！已自动填充提示词、参数和 ${parsed.loras.length} 个 LoRA`
+        : '导入成功！已自动填充提示词和参数'
+      alert(importMsg)
     } catch (err) {
       console.error('[PresetDialog] Import failed:', err)
       alert('导入失败：' + err.message)

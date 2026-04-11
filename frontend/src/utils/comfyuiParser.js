@@ -6,7 +6,7 @@
 /**
  * 解析 ComfyUI 图片信息文件
  * @param {string} content - 文件内容
- * @returns {object} 解析结果 { posText, negText, model, params }
+ * @returns {object} 解析结果 { posText, negText, model, params, loras }
  */
 export function parseComfyUIFile(content) {
   const lines = content.split('\n').filter(line => line.trim())
@@ -49,7 +49,7 @@ export function parseComfyUIFile(content) {
 /**
  * 从 ComfyUI prompt 数据中提取提示词信息
  * @param {object} promptData - 解析后的 prompt JSON
- * @returns {object} 提取的信息 { posText, negText, model, params }
+ * @returns {object} 提取的信息 { posText, negText, model, params, loras }
  */
 function extractPromptInfo(promptData) {
   const result = {
@@ -60,9 +60,12 @@ function extractPromptInfo(promptData) {
       steps: 30,
       cfg: 7,
       sampler: 'DPM++ 2M Karras',
+      scheduler: 'karras',
+      seed: -1,
       width: 512,
       height: 512,
-    }
+    },
+    loras: []
   }
   
   const nodes = Object.values(promptData)
@@ -104,9 +107,23 @@ function extractPromptInfo(promptData) {
   
   if (samplerNodes.length > 0) {
     const inputs = samplerNodes[0].inputs || {}
-    result.params.steps = inputs.steps || 30
-    result.params.cfg = inputs.cfg || 7
-    result.params.sampler = inputs.sampler_name || inputs.sampler || 'DPM++ 2M Karras'
+    result.params.steps = inputs.steps ?? 30
+    result.params.cfg = inputs.cfg ?? 7
+    result.params.seed = inputs.seed ?? -1
+    result.params.scheduler = inputs.scheduler || 'karras'
+    
+    // 采样器名称组合
+    const samplerName = inputs.sampler_name || inputs.sampler || 'euler'
+    const scheduler = inputs.scheduler || 'normal'
+    
+    // 组合成完整采样器名称
+    if (scheduler && scheduler !== 'normal' && scheduler !== 'karras') {
+      result.params.sampler = `${samplerName} ${scheduler.charAt(0).toUpperCase() + scheduler.slice(1)}`
+    } else if (scheduler === 'karras') {
+      result.params.sampler = `${samplerName} ${scheduler.charAt(0).toUpperCase() + scheduler.slice(1)}`
+    } else {
+      result.params.sampler = samplerName
+    }
   }
   
   // 4. 提取图片尺寸（EmptyLatentImage 节点）
@@ -121,11 +138,100 @@ function extractPromptInfo(promptData) {
     result.params.height = inputs.height || 512
   }
   
+  // 5. 提取 LoRA 信息
+  result.loras = extractLoras(nodes)
+  
   // 清理提示词中的多余空格和换行
   result.posText = cleanPromptText(result.posText)
   result.negText = cleanPromptText(result.negText)
   
   return result
+}
+
+/**
+ * 从节点中提取 LoRA 信息
+ * @param {Array} nodes - 所有节点
+ * @returns {Array} LoRA 列表 [{ name, weight }]
+ */
+function extractLoras(nodes) {
+  const loras = []
+  
+  // 支持多种 LoRA 加载器节点
+  const loraNodes = nodes.filter(node =>
+    node.class_type === 'LoraLoader' ||
+    node.class_type === 'LoraLoaderModelOnly' ||
+    node.class_type === 'LoraLoaderStack' ||
+    node.class_type === 'LoraStackLoader' ||
+    node.class_type === 'CR LoRA Stack' ||
+    node.class_type?.includes('Lora')
+  )
+  
+  for (const node of loraNodes) {
+    const inputs = node.inputs || {}
+    
+    // 单 LoRA 加载器
+    if (inputs.lora_name) {
+      const loraName = inputs.lora_name.split('\\').pop().split('/').pop()
+      const weight = inputs.strength_model ?? inputs.weight ?? 1.0
+      loras.push({
+        name: loraName,
+        weight: parseFloat(weight.toFixed(2))
+      })
+    }
+    
+    // LoRA Stack（多个 LoRA）
+    if (inputs.lora_list || inputs.lora_stack) {
+      const list = inputs.lora_list || inputs.lora_stack || []
+      for (const item of list) {
+        if (item.lora_name) {
+          const loraName = item.lora_name.split('\\').pop().split('/').pop()
+          loras.push({
+            name: loraName,
+            weight: parseFloat((item.strength || item.weight || 1.0).toFixed(2))
+          })
+        }
+      }
+    }
+    
+    // 处理 switch_1, lora_1, switch_2, lora_2 等格式
+    for (let i = 1; i <= 10; i++) {
+      const switchKey = `switch_${i}`
+      const loraKey = `lora_${i}`
+      const weightKey = `weight_${i}` || `strength_${i}`
+      
+      if (inputs[loraKey] && inputs[switchKey] !== 'Off') {
+        const loraName = inputs[loraKey].split('\\').pop().split('/').pop()
+        const weight = inputs[weightKey] ?? 1.0
+        loras.push({
+          name: loraName,
+          weight: parseFloat(weight.toFixed(2))
+        })
+      }
+    }
+  }
+  
+  // 从正向提示词中提取 LoRA 引用
+  // 格式：<lora:文件名:权重>
+  const clipTextNodes = nodes.filter(node => 
+    node.class_type === 'CLIPTextEncode' || 
+    node.class_type === 'CLIPTextEncodeFlux'
+  )
+  
+  for (const node of clipTextNodes) {
+    const text = node.inputs?.text || ''
+    const loraMatches = text.matchAll(/<lora:([^:]+):([\d.]+)>/gi)
+    for (const match of loraMatches) {
+      const existingLora = loras.find(l => l.name === match[1])
+      if (!existingLora) {
+        loras.push({
+          name: match[1],
+          weight: parseFloat(match[2])
+        })
+      }
+    }
+  }
+  
+  return loras
 }
 
 /**
@@ -137,9 +243,10 @@ function cleanPromptText(text) {
   if (!text) return ''
   
   return text
-    .replace(/\n+/g, ' ')      // 将多个换行替换为空格
-    .replace(/\s+/g, ' ')       // 将多个空格合并为一个
-    .replace(/,\s*,/g, ',')     // 清理多余的逗号
+    .replace(/<lora:[^>]+>/gi, '')  // 移除 LoRA 标签
+    .replace(/\n+/g, ' ')           // 将多个换行替换为空格
+    .replace(/\s+/g, ' ')           // 将多个空格合并为一个
+    .replace(/,\s*,/g, ',')         // 清理多余的逗号
     .trim()
 }
 
