@@ -53,6 +53,16 @@
             </div>
           </div>
           
+          <!-- 导入 ComfyUI 信息 -->
+          <div class="form-group import-section">
+            <label>快速导入</label>
+            <button type="button" class="btn-import" @click="importComfyUIFile">
+              <DocumentArrowUpIcon class="w-4 h-4" />
+              导入 ComfyUI 图片信息
+            </button>
+            <span class="import-hint">选择 ComfyUI 生成的 txt 文件，自动填充提示词和参数</span>
+          </div>
+          
           <div class="form-row">
             <div class="form-group" style="flex: 1;">
               <label>预设标题 <span class="required">*</span></label>
@@ -216,9 +226,11 @@ import {
   TrashIcon,
   CheckIcon,
   StarIcon,
+  DocumentArrowUpIcon,
 } from '@heroicons/vue/24/outline'
 import ImageViewer from './ImageViewer.vue'
 import { useCategoryStore } from '../stores'
+import { parseComfyUIFile, readFileContent } from '../utils/comfyuiParser'
 
 
 const props = defineProps({
@@ -355,6 +367,62 @@ function removePreview(index) {
 
 function setAsCover(index) {
   form.value.thumbnail = form.value.previews[index]
+}
+
+// 导入 ComfyUI 图片信息文件
+async function importComfyUIFile() {
+  const input = document.createElement('input')
+  input.type = 'file'
+  input.accept = '.txt'
+  
+  input.onchange = async (e) => {
+    const file = e.target.files[0]
+    if (!file) return
+    
+    try {
+      console.log('[PresetDialog] Importing ComfyUI file:', file.name)
+      const content = await readFileContent(file)
+      const parsed = parseComfyUIFile(content)
+      
+      console.log('[PresetDialog] Parsed ComfyUI data:', {
+        posText: parsed.posText?.substring(0, 50) + '...',
+        negText: parsed.negText?.substring(0, 50) + '...',
+        model: parsed.model,
+        params: parsed.params,
+      })
+      
+      // 填充表单数据
+      if (parsed.posText) {
+        form.value.pos_text = parsed.posText
+      }
+      if (parsed.negText) {
+        form.value.neg_text = parsed.negText
+      }
+      if (parsed.model) {
+        form.value.params.model = parsed.model
+      }
+      
+      // 更新参数
+      if (parsed.params) {
+        form.value.params.steps = parsed.params.steps || 30
+        form.value.params.cfg = parsed.params.cfg || 7
+        form.value.params.sampler = parsed.params.sampler || 'DPM++ 2M Karras'
+      }
+      
+      // 如果没有标题，尝试从文件名生成
+      if (!form.value.title.trim()) {
+        const fileName = file.name.replace(/\.txt$/i, '').replace(/^ComfyUI_/, '')
+        form.value.title = fileName
+      }
+      
+      alert('导入成功！已自动填充提示词和参数')
+    } catch (err) {
+      console.error('[PresetDialog] Import failed:', err)
+      alert('导入失败：' + err.message)
+    }
+  }
+  
+  input.click()
 }
 
 function openImageViewer(index) {
@@ -790,5 +858,50 @@ async function handleDelete() {
 
 .btn-danger:hover {
   background-color: rgba(239, 68, 68, 0.1);
+}
+
+/* 导入区域样式 */
+.import-section {
+  background-color: rgba(14, 165, 233, 0.05);
+  border: 1px dashed #0ea5e9;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 16px;
+}
+
+.import-section label {
+  color: #0ea5e9;
+  font-weight: 500;
+}
+
+.btn-import {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 16px;
+  background-color: rgba(14, 165, 233, 0.1);
+  border: 1px solid #0ea5e9;
+  border-radius: 8px;
+  color: #0ea5e9;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  margin-top: 8px;
+}
+
+.btn-import:hover {
+  background-color: #0ea5e9;
+  color: white;
+}
+
+.import-hint {
+  display: block;
+  font-size: 12px;
+  color: #64748b;
+  margin-top: 8px;
+  text-align: center;
 }
 </style>
