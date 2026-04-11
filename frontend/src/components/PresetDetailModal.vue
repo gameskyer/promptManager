@@ -893,16 +893,19 @@ onUnmounted(() => {
 .viewer-image-wrapper {
   flex: 1;
   width: 100%;
+  height: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 60px 80px;
+  padding: 80px 100px 120px;
   box-sizing: border-box;
 }
 
 .viewer-image-wrapper img {
-  max-width: 100%;
-  max-height: 100%;
+  max-width: calc(100vw - 200px);
+  max-height: calc(100vh - 240px);
+  width: auto;
+  height: auto;
   object-fit: contain;
   border-radius: 8px;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);

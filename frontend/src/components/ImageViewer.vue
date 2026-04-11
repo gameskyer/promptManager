@@ -291,16 +291,18 @@ function handleMouseUp() {
 }
 
 .image-container {
-  max-width: 100%;
-  max-height: 100%;
+  max-width: calc(100vw - 80px);
+  max-height: calc(100vh - 80px);
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
 .image-container img {
-  max-width: 100%;
-  max-height: 100%;
+  max-width: calc(100vw - 80px);
+  max-height: calc(100vh - 80px);
+  width: auto;
+  height: auto;
   object-fit: contain;
   user-select: none;
 }

@@ -891,16 +891,20 @@ function handleKeydown(e) {
 .viewer-image-wrapper {
   flex: 1;
   width: 100%;
+  height: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 60px 80px;
+  padding: 80px 100px 120px; /* 上、左右、下（为缩略图留空间） */
   box-sizing: border-box;
 }
 
 .viewer-image-wrapper img {
-  max-width: 100%;
-  max-height: 100%;
+  /* 使用视口单位确保图片适应屏幕，减去 padding 和导航元素的空间 */
+  max-width: calc(100vw - 200px);
+  max-height: calc(100vh - 240px);
+  width: auto;
+  height: auto;
   object-fit: contain;
   border-radius: 8px;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
