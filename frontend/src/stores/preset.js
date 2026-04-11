@@ -304,7 +304,8 @@ export const usePresetStore = defineStore('preset', () => {
       const preset = presets.value.find(p => p.id === id)
       if (preset) {
         // 这里仅更新本地状态，实际缩略图应通过版本管理
-        preset.thumbnail_path = thumbnail
+        // 后端返回的字段是 thumbnail，不是 thumbnail_path
+        preset.thumbnail = thumbnail
         if (previews !== null) {
           preset.previews = previews
         }

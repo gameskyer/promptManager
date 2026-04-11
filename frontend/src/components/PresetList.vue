@@ -138,6 +138,14 @@ function getPresetChildren(parentId) {
 // 搜索和筛选
 const searchQuery = ref('')
 
+// 获取用于 API 调用的 categoryId（处理 -1 未分类的情况）
+function getApiCategoryId() {
+  if (currentCategoryId.value === -1) {
+    return 0  // 未分类需要获取全部，然后前端筛选
+  }
+  return currentCategoryId.value
+}
+
 const filteredPresets = computed(() => {
   let result = presets.value
   
@@ -326,7 +334,7 @@ async function savePreset(data) {
       )
     }
     closePresetDialog()
-    await presetStore.fetchPresets(1, 20, currentCategoryId.value > 0 ? currentCategoryId.value : 0)
+    await presetStore.fetchPresets(1, 20, getApiCategoryId())
   } catch (error) {
     console.error('Failed to save preset:', error)
     alert('保存预设失败: ' + error.message)
@@ -335,7 +343,7 @@ async function savePreset(data) {
 
 async function deletePreset(id) {
   await presetStore.softDeletePreset(id)
-  await presetStore.fetchPresets(1, 20, currentCategoryId.value > 0 ? currentCategoryId.value : 0)
+  await presetStore.fetchPresets(1, 20, getApiCategoryId())
 }
 
 function viewPreset(preset) {
@@ -358,7 +366,8 @@ async function viewPresetHistory(preset) {
 }
 
 async function updateThumbnail(presetId, thumbnailUrl, newPreviews = null) {
-  const preset = presets.value.find(p => p.id === presetId)
+  // 从 store 获取原始 preset 数组（不是 computed 的 activePresets）
+  const preset = presetStore.presets.find(p => p.id === presetId)
   if (!preset) return
   
   console.log('[PresetList] updateThumbnail:', {
@@ -372,11 +381,11 @@ async function updateThumbnail(presetId, thumbnailUrl, newPreviews = null) {
     // 如果没有传入 newPreviews，只是切换当前显示的封面图
     // 保持原有的 previews 列表不变
     if (!newPreviews) {
-      // 只更新封面图（thumbnail），保持 previews 不变
-      preset.thumbnail = thumbnailUrl
-      
       // 保存到后端（只更新封面图）
       await versionStore.updateVersionPreview(presetId, thumbnailUrl, preset.previews)
+      
+      // 使用 store action 更新本地状态，避免直接修改 computed 属性
+      await presetStore.updateThumbnailOnly(presetId, thumbnailUrl, preset.previews)
       
       console.log('[PresetList] updateThumbnail (switch only):', {
         thumbnailUrl,
@@ -416,12 +425,11 @@ async function updateThumbnail(presetId, thumbnailUrl, newPreviews = null) {
       thumbnailPath = uploadedPaths[0] || allPreviewPaths[0] || ''
     }
     
-    // 更新本地状态
-    preset.thumbnail = thumbnailPath
-    preset.previews = allPreviewPaths
-    
     // 保存到后端（只更新预览图，不创建新版本）
     await versionStore.updateVersionPreview(presetId, thumbnailPath, allPreviewPaths)
+    
+    // 使用 store action 更新本地状态，避免直接修改 computed 属性
+    await presetStore.updateThumbnailOnly(presetId, thumbnailPath, allPreviewPaths)
     
     console.log('[PresetList] updateThumbnail saved:', {
       thumbnailPath,
