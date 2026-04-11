@@ -887,22 +887,21 @@ function handleKeydown(e) {
   z-index: 10;
 }
 
-/* 主图片区域 */
+/* 主图片区域 - 使用 position absolute 避免 flex 布局高度计算问题 */
 .viewer-image-wrapper {
-  flex: 1;
-  width: 100%;
-  height: 100%;
+  position: absolute;
+  top: 80px;
+  left: 100px;
+  right: 100px;
+  bottom: 120px;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 80px 100px 120px; /* 上、左右、下（为缩略图留空间） */
-  box-sizing: border-box;
 }
 
 .viewer-image-wrapper img {
-  /* 使用视口单位确保图片适应屏幕，减去 padding 和导航元素的空间 */
-  max-width: calc(100vw - 200px);
-  max-height: calc(100vh - 240px);
+  max-width: 100%;
+  max-height: 100%;
   width: auto;
   height: auto;
   object-fit: contain;
@@ -990,6 +989,7 @@ function handleKeydown(e) {
 .viewer-thumb img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
+  background-color: rgba(0, 0, 0, 0.3);
 }
 </style>

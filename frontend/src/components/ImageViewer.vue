@@ -282,25 +282,24 @@ function handleMouseUp() {
 
 .viewer-main {
   flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   position: relative;
   overflow: hidden;
-  padding: 20px;
 }
 
 .image-container {
-  max-width: calc(100vw - 80px);
-  max-height: calc(100vh - 80px);
+  position: absolute;
+  top: 20px;
+  left: 80px;
+  right: 80px;
+  bottom: 20px;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
 .image-container img {
-  max-width: calc(100vw - 80px);
-  max-height: calc(100vh - 80px);
+  max-width: 100%;
+  max-height: 100%;
   width: auto;
   height: auto;
   object-fit: contain;
