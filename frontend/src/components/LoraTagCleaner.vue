@@ -110,37 +110,34 @@
             <span class="col-action">操作</span>
           </div>
           
-          <draggable
-            v-model="currentTags"
-            item-key="id"
-            handle=".drag-handle"
-            class="tag-list"
-          >
-            <template #item="{ element, index }">
-              <div class="tag-item">
-                <div class="drag-handle">
-                  <Bars3Icon class="w-4 h-4" />
-                </div>
-                <input
-                  v-model="element.tag"
-                  class="tag-input"
-                  placeholder="输入 TAG"
-                  @change="translateTag(index)"
-                />
-                <input
-                  v-model="element.translation"
-                  class="trans-input"
-                  placeholder="翻译"
-                  readonly
-                />
-                <button class="btn-icon danger" @click="removeTag(index)">
-                  <XMarkIcon class="w-4 h-4" />
-                </button>
+          <div v-if="currentPair.tags.length > 0" class="tag-list">
+            <div
+              v-for="(element, index) in currentPair.tags"
+              :key="element.id"
+              class="tag-item"
+            >
+              <div class="drag-handle">
+                <Bars3Icon class="w-4 h-4" />
               </div>
-            </template>
-          </draggable>
+              <input
+                v-model="element.tag"
+                class="tag-input"
+                placeholder="输入 TAG"
+                @change="translateTag(index)"
+              />
+              <input
+                v-model="element.translation"
+                class="trans-input"
+                placeholder="翻译"
+                readonly
+              />
+              <button class="btn-icon danger" @click="removeTag(index)">
+                <XMarkIcon class="w-4 h-4" />
+              </button>
+            </div>
+          </div>
           
-          <div v-if="currentTags.length === 0" class="empty-tags">
+          <div v-if="currentTagsList.length === 0" class="empty-tags">
             <p>暂无 TAG</p>
             <button class="btn-link" @click="addEmptyTag">添加第一个 TAG</button>
           </div>
@@ -295,7 +292,6 @@
 
 <script setup>
 import { ref, computed, watch, nextTick, onUnmounted } from 'vue'
-import draggable from 'vuedraggable'
 import JSZip from 'jszip'
 import {
   SparklesIcon,
@@ -349,15 +345,9 @@ const currentPair = computed(() => {
   return null
 })
 
-const currentTags = computed({
-  get() {
-    return currentPair.value?.tags || []
-  },
-  set(val) {
-    if (currentPair.value) {
-      currentPair.value.tags = val
-    }
-  }
+// 当前 TAG 列表（直接使用，不通过计算属性包装）
+const currentTagsList = computed(() => {
+  return currentPair.value?.tags || []
 })
 
 // 所有唯一的 TAG 及其计数
@@ -525,7 +515,7 @@ function parseTags(content) {
 
 // AI 翻译 TAG（模拟，实际应调用 AI 服务）
 async function translateTag(index) {
-  const tag = currentTags.value[index]
+  const tag = currentPair.value?.tags[index]
   if (!tag || !tag.tag || tag.translation) return
   
   // 先从缓存查找
@@ -628,18 +618,18 @@ function addEmptyTag() {
 }
 
 function removeTag(index) {
-  currentTags.value.splice(index, 1)
+  currentPair.value?.tags.splice(index, 1)
 }
 
 function clearAllTags() {
   if (!currentPair.value) return
   if (confirm('确定要清空当前图片的所有 TAG 吗？')) {
-    currentTags.value = []
+    if (currentPair.value) currentPair.value.tags = []
   }
 }
 
 function isTagInCurrent(tag) {
-  return currentTags.value.some(t => t.tag === tag)
+  return currentPair.value?.tags.some(t => t.tag === tag) || false
 }
 
 function addTagToCurrent(tag, translation) {
