@@ -153,6 +153,26 @@
     
     <div class="menu-section">
       <div class="section-header">
+        <span class="section-title">工具</span>
+      </div>
+      <div class="menu-tree">
+        <div
+          class="menu-item"
+          :class="{ active: currentView === 'lora-tag-cleaner' }"
+          @click="selectLoraTagCleanerView"
+        >
+          <div class="menu-item-header">
+            <SparklesIcon class="w-4 h-4 icon text-amber-400" />
+            <span class="item-label">LoRA标签清洗</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <div class="menu-divider"></div>
+    
+    <div class="menu-section">
+      <div class="section-header">
         <span class="section-title">管理</span>
       </div>
       <div class="menu-tree">
@@ -204,6 +224,7 @@ import {
   PencilIcon,
   SwatchIcon,
   DocumentTextIcon,
+  SparklesIcon,
 } from '@heroicons/vue/24/outline'
 import { useAppStore, useCategoryStore, useAtomStore, usePresetStore } from '../stores'
 import CategoryDialog from './CategoryDialog.vue'
@@ -375,6 +396,13 @@ function selectAtomManagementView() {
 function selectCategoryManagementView() {
   currentView.value = 'category-management'
   emit('view-change', 'category-management')
+  appStore.setCategory(null)
+  appStore.setSubCategory(null)
+}
+
+function selectLoraTagCleanerView() {
+  currentView.value = 'lora-tag-cleaner'
+  emit('view-change', 'lora-tag-cleaner')
   appStore.setCategory(null)
   appStore.setSubCategory(null)
 }

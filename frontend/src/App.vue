@@ -13,6 +13,7 @@
       <PresetList v-else-if="currentView === 'presets'" :selected-category="selectedPresetCategory" />
       <AtomManagement v-else-if="currentView === 'atom-management'" />
       <CategoryManagement v-else-if="currentView === 'category-management'" />
+      <LoraTagCleaner v-else-if="currentView === 'lora-tag-cleaner'" />
       
       <!-- Right Workbench -->
       <Workbench v-if="currentView === 'atoms'" />
@@ -34,6 +35,7 @@ import MainContent from './components/MainContent.vue'
 import PresetList from './components/PresetList.vue'
 import AtomManagement from './components/AtomManagement.vue'
 import CategoryManagement from './components/CategoryManagement.vue'
+import LoraTagCleaner from './components/LoraTagCleaner.vue'
 import Workbench from './components/Workbench.vue'
 import Timeline from './components/Timeline.vue'
 
