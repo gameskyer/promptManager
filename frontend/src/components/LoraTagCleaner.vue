@@ -141,6 +141,35 @@
             <p>暂无 TAG</p>
             <button class="btn-link" @click="addEmptyTag">添加第一个 TAG</button>
           </div>
+          
+          <!-- TAG 列表操作栏 -->
+          <div v-if="currentTagsList.length > 0" class="tag-list-actions">
+            <div class="actions-left">
+              <span class="tag-count-info">
+                共 {{ currentTagsList.length }} 个 TAG
+              </span>
+            </div>
+            <div class="actions-center">
+              <button class="btn-text" @click="copyAllTags" title="复制 TAG 列表到剪贴板">
+                <ClipboardDocumentIcon class="w-4 h-4" />
+                复制
+              </button>
+              <button class="btn-text" @click="pasteTags" title="从剪贴板粘贴 TAG">
+                <ClipboardDocumentListIcon class="w-4 h-4" />
+                粘贴
+              </button>
+            </div>
+            <div class="actions-right">
+              <button class="btn-text danger" @click="clearAllTags" title="清空所有 TAG">
+                <TrashIcon class="w-4 h-4" />
+                清空
+              </button>
+              <button class="btn-text primary" @click="applyTagsToAll" title="将当前 TAG 应用到所有图片">
+                <DocumentDuplicateIcon class="w-4 h-4" />
+                应用到全部
+              </button>
+            </div>
+          </div>
         </div>
         
         <div v-else class="empty-state">
@@ -305,6 +334,9 @@ import {
   CloudArrowUpIcon,
   DocumentTextIcon,
   TagIcon,
+  ClipboardDocumentIcon,
+  ClipboardDocumentListIcon,
+  DocumentDuplicateIcon,
 } from '@heroicons/vue/24/outline'
 
 // 文件对数据结构
@@ -610,7 +642,7 @@ async function mockTranslate(tag) {
 // TAG 操作
 function addEmptyTag() {
   if (!currentPair.value) return
-  currentTags.value.push({
+  currentPair.value.tags.push({
     id: `tag-${Date.now()}-${Math.random()}`,
     tag: '',
     translation: ''
@@ -636,7 +668,7 @@ function addTagToCurrent(tag, translation) {
   if (!currentPair.value) return
   if (isTagInCurrent(tag)) return
   
-  currentTags.value.push({
+  currentPair.value.tags.push({
     id: `tag-${Date.now()}-${Math.random()}`,
     tag,
     translation: translation || ''
@@ -676,6 +708,95 @@ function focusTranslation() {
   nextTick(() => {
     transInput.value?.focus()
   })
+}
+
+// 复制所有 TAG 到剪贴板
+async function copyAllTags() {
+  if (!currentPair.value) return
+  const tagsText = currentPair.value.tags.map(t => t.tag).join(', ')
+  try {
+    await navigator.clipboard.writeText(tagsText)
+    alert('TAG 列表已复制到剪贴板')
+  } catch (err) {
+    console.error('复制失败:', err)
+    // 降级方案
+    const textarea = document.createElement('textarea')
+    textarea.value = tagsText
+    document.body.appendChild(textarea)
+    textarea.select()
+    document.execCommand('copy')
+    document.body.removeChild(textarea)
+    alert('TAG 列表已复制到剪贴板')
+  }
+}
+
+// 从剪贴板粘贴 TAG
+async function pasteTags() {
+  if (!currentPair.value) return
+  try {
+    const text = await navigator.clipboard.readText()
+    if (!text.trim()) {
+      alert('剪贴板为空')
+      return
+    }
+    
+    // 解析粘贴的 TAG（支持逗号、换行分隔）
+    const newTags = text.split(/[,，\n]/).map(t => t.trim()).filter(Boolean)
+    
+    if (newTags.length === 0) {
+      alert('未找到有效的 TAG')
+      return
+    }
+    
+    // 去重并添加到当前列表
+    let addedCount = 0
+    for (const tagText of newTags) {
+      // 检查是否已存在
+      if (!currentPair.value.tags.some(t => t.tag.toLowerCase() === tagText.toLowerCase())) {
+        currentPair.value.tags.push({
+          id: `tag-${Date.now()}-${Math.random()}`,
+          tag: tagText,
+          translation: findTranslationInCache(tagText) || ''
+        })
+        addedCount++
+      }
+    }
+    
+    alert(`成功添加 ${addedCount} 个新 TAG`)
+  } catch (err) {
+    console.error('粘贴失败:', err)
+    alert('无法读取剪贴板，请手动粘贴')
+  }
+}
+
+// 将当前 TAG 应用到所有图片
+function applyTagsToAll() {
+  if (!currentPair.value || currentPair.value.tags.length === 0) {
+    alert('当前图片没有 TAG 可复制')
+    return
+  }
+  
+  if (!confirm('确定要将当前图片的所有 TAG 应用到所有其他图片吗？\n（会跳过已存在的 TAG）')) {
+    return
+  }
+  
+  let totalAdded = 0
+  for (const pair of filePairs.value) {
+    if (pair === currentPair.value) continue
+    
+    for (const tag of currentPair.value.tags) {
+      if (!pair.tags.some(t => t.tag.toLowerCase() === tag.tag.toLowerCase())) {
+        pair.tags.push({
+          id: `tag-${Date.now()}-${Math.random()}`,
+          tag: tag.tag,
+          translation: tag.translation
+        })
+        totalAdded++
+      }
+    }
+  }
+  
+  alert(`已应用 ${totalAdded} 个 TAG 到其他图片`)
 }
 
 // 导出文件
@@ -1124,6 +1245,76 @@ onUnmounted(() => {
   justify-content: center;
   gap: 12px;
   color: #64748b;
+}
+
+/* TAG 列表操作栏 */
+.tag-list-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background-color: #1e293b;
+  border-top: 1px solid #334155;
+  gap: 16px;
+}
+
+.actions-left {
+  flex-shrink: 0;
+}
+
+.tag-count-info {
+  font-size: 12px;
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+.actions-center {
+  display: flex;
+  gap: 8px;
+  flex: 1;
+  justify-content: center;
+}
+
+.actions-right {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.btn-text {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: none;
+  background-color: transparent;
+  color: #94a3b8;
+}
+
+.btn-text:hover {
+  background-color: #334155;
+  color: #e2e8f0;
+}
+
+.btn-text.primary {
+  color: #0ea5e9;
+}
+
+.btn-text.primary:hover {
+  background-color: rgba(14, 165, 233, 0.1);
+}
+
+.btn-text.danger {
+  color: #ef4444;
+}
+
+.btn-text.danger:hover {
+  background-color: rgba(239, 68, 68, 0.1);
 }
 
 .empty-state {
