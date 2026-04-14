@@ -104,6 +104,21 @@
             </div>
           </div>
           
+          <!-- 快速添加 TAG -->
+          <div class="quick-add-tag">
+            <input
+              v-model="quickAddTagText"
+              type="text"
+              placeholder="输入新 TAG 按回车添加..."
+              class="quick-add-input"
+              @keyup.enter="addQuickTag"
+            />
+            <button class="btn-primary" @click="addQuickTag">
+              <PlusIcon class="w-4 h-4" />
+              添加
+            </button>
+          </div>
+          
           <div class="tag-list-header">
             <span class="col-tag">TAG</span>
             <span class="col-trans">翻译</span>
@@ -368,6 +383,9 @@ const newTag = ref({
   translation: '',
   applyToAll: false
 })
+
+// 快速添加 TAG 输入
+const quickAddTagText = ref('')
 
 // 计算属性
 const currentPair = computed(() => {
@@ -647,6 +665,29 @@ function addEmptyTag() {
     tag: '',
     translation: ''
   })
+}
+
+// 快速添加 TAG
+function addQuickTag() {
+  if (!currentPair.value) return
+  const tagText = quickAddTagText.value.trim()
+  if (!tagText) return
+  
+  // 检查是否已存在（不区分大小写）
+  if (currentPair.value.tags.some(t => t.tag.toLowerCase() === tagText.toLowerCase())) {
+    alert(`TAG "${tagText}" 已存在`)
+    return
+  }
+  
+  // 添加到列表
+  currentPair.value.tags.push({
+    id: `tag-${Date.now()}-${Math.random()}`,
+    tag: tagText,
+    translation: findTranslationInCache(tagText) || ''
+  })
+  
+  // 清空输入
+  quickAddTagText.value = ''
 }
 
 function removeTag(index) {
@@ -1183,6 +1224,34 @@ onUnmounted(() => {
   font-size: 12px;
   font-weight: 600;
   color: #94a3b8;
+}
+
+/* 快速添加 TAG */
+.quick-add-tag {
+  display: flex;
+  gap: 10px;
+  padding: 12px 16px;
+  background-color: #1e293b;
+  border-bottom: 1px solid #334155;
+}
+
+.quick-add-input {
+  flex: 1;
+  padding: 8px 12px;
+  background-color: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  color: #e2e8f0;
+  font-size: 13px;
+  outline: none;
+}
+
+.quick-add-input:focus {
+  border-color: #0ea5e9;
+}
+
+.quick-add-input::placeholder {
+  color: #64748b;
 }
 
 .col-tag, .col-trans {
