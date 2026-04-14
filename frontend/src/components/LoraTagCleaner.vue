@@ -15,6 +15,14 @@
           上传文件
         </button>
         <button 
+          v-if="filePairs.length > 0"
+          class="btn-danger" 
+          @click="cleanupFilePairs"
+        >
+          <TrashIcon class="w-4 h-4" />
+          清空
+        </button>
+        <button 
           class="btn-primary" 
           @click="exportFiles"
           :disabled="filePairs.length === 0"
@@ -40,7 +48,17 @@
             :class="{ active: currentIndex === index, 'no-tags': !pair.hasTags }"
             @click="selectFile(index)"
           >
-            <img :src="pair.preview" class="file-thumb" />
+            <div class="file-thumb-wrapper">
+              <img 
+                v-if="!pair.imageError"
+                :src="pair.preview" 
+                class="file-thumb" 
+                @error="handleImageError(pair)"
+              />
+              <div v-else class="file-thumb-error">
+                <PhotoIcon class="w-6 h-6" />
+              </div>
+            </div>
             <div class="file-info">
               <span class="file-name">{{ pair.name }}</span>
               <span class="file-status">
@@ -48,6 +66,13 @@
                 <span v-else class="no-tag-indicator">无标签</span>
               </span>
             </div>
+            <button 
+              class="btn-icon remove-file"
+              @click.stop="removeFilePair(index)"
+              title="删除"
+            >
+              <XMarkIcon class="w-3 h-3" />
+            </button>
           </div>
         </div>
       </div>
@@ -68,7 +93,15 @@
         
         <div v-if="currentPair" class="tag-editor">
           <div class="current-image">
-            <img :src="currentPair.preview" />
+            <img 
+              v-if="!currentPair.imageError"
+              :src="currentPair.preview" 
+              @error="handleImageError(currentPair)"
+            />
+            <div v-else class="current-image-error">
+              <PhotoIcon class="w-16 h-16" />
+              <span>图片加载失败</span>
+            </div>
           </div>
           
           <div class="tag-list-header">
@@ -261,7 +294,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, nextTick } from 'vue'
+import { ref, computed, watch, nextTick, onUnmounted } from 'vue'
 import draggable from 'vuedraggable'
 import JSZip from 'jszip'
 import {
@@ -286,8 +319,9 @@ class FilePair {
     this.imageFile = imageFile
     this.textFile = textFile
     this.preview = URL.createObjectURL(imageFile)
-    this.hasTags = !!textFile
+    this.hasTags = false
     this.tags = [] // { id, tag, translation }
+    this.imageError = false
   }
 }
 
@@ -384,21 +418,47 @@ function formatSize(bytes) {
 // 确认上传
 async function confirmUpload() {
   const imageFiles = uploadPreview.value.filter(f => f.type.startsWith('image'))
-  const textFiles = uploadPreview.value.filter(f => f.name.endsWith('.txt'))
+  const textFiles = uploadPreview.value.filter(f => f.name.toLowerCase().endsWith('.txt'))
   
-  // 创建文件名映射
+  // 创建文件名映射（使用小写进行不区分大小写的匹配）
   const textMap = new Map()
   for (const textFile of textFiles) {
-    const baseName = textFile.name.replace(/\.txt$/i, '')
+    const baseName = textFile.name.replace(/\.txt$/i, '').toLowerCase()
     textMap.set(baseName, textFile)
   }
+  
+  // 统计信息
+  let matchedCount = 0
+  let unmatchedCount = 0
   
   // 创建文件对
   let id = filePairs.value.length
   for (const imageFile of imageFiles) {
     const baseName = imageFile.name.replace(/\.(jpg|jpeg|png|webp)$/i, '')
-    const textFile = textMap.get(baseName) || null
+    const baseNameLower = baseName.toLowerCase()
+    const textFile = textMap.get(baseNameLower) || null
     
+    // 检查是否已存在相同名称的文件对（避免重复）
+    const existingIndex = filePairs.value.findIndex(p => p.name.toLowerCase() === baseNameLower)
+    
+    if (existingIndex >= 0) {
+      // 更新现有文件对的文本文件
+      if (textFile) {
+        const pair = filePairs.value[existingIndex]
+        pair.textFile = textFile
+        pair.hasTags = true
+        try {
+          const content = await readFile(textFile)
+          pair.tags = parseTags(content)
+          matchedCount++
+        } catch (e) {
+          console.error('Failed to parse tags:', e)
+        }
+      }
+      continue
+    }
+    
+    // 创建新文件对
     const pair = new FilePair(id++, baseName, imageFile, textFile)
     
     // 解析 TXT 文件
@@ -406,12 +466,27 @@ async function confirmUpload() {
       try {
         const content = await readFile(textFile)
         pair.tags = parseTags(content)
+        pair.hasTags = true
+        matchedCount++
       } catch (e) {
         console.error('Failed to parse tags:', e)
+        pair.hasTags = false
+        unmatchedCount++
       }
+    } else {
+      unmatchedCount++
     }
     
     filePairs.value.push(pair)
+  }
+  
+  // 显示上传结果提示
+  if (matchedCount > 0 && unmatchedCount > 0) {
+    alert(`上传完成！\n✓ ${matchedCount} 个文件已匹配标签\n○ ${unmatchedCount} 个图片无对应标签文件`)
+  } else if (matchedCount > 0) {
+    alert(`上传完成！成功加载 ${matchedCount} 个图片及其标签`)
+  } else if (unmatchedCount > 0) {
+    alert(`已上传 ${unmatchedCount} 个图片（无标签文件）\n提示：可后续上传对应的 .txt 文件补充标签`)
   }
   
   // 自动选择第一个
@@ -641,10 +716,39 @@ async function exportFiles() {
   URL.revokeObjectURL(url)
 }
 
-// 清理
-watch(filePairs, () => {
-  // 当组件卸载时清理 URL 对象
-}, { deep: true })
+// 处理图片加载错误
+function handleImageError(pair) {
+  pair.imageError = true
+}
+
+// 清理所有文件对（释放 URL 对象）
+function cleanupFilePairs() {
+  for (const pair of filePairs.value) {
+    if (pair.preview && pair.preview.startsWith('blob:')) {
+      URL.revokeObjectURL(pair.preview)
+    }
+  }
+  filePairs.value = []
+}
+
+// 删除单个文件对
+function removeFilePair(index) {
+  const pair = filePairs.value[index]
+  if (pair.preview && pair.preview.startsWith('blob:')) {
+    URL.revokeObjectURL(pair.preview)
+  }
+  filePairs.value.splice(index, 1)
+  
+  // 调整当前选中索引
+  if (currentIndex.value >= filePairs.value.length) {
+    currentIndex.value = filePairs.value.length - 1
+  }
+}
+
+// 组件卸载时清理
+onUnmounted(() => {
+  cleanupFilePairs()
+})
 </script>
 
 <style scoped>
@@ -727,6 +831,26 @@ watch(filePairs, () => {
 
 .btn-secondary:hover {
   background-color: #334155;
+}
+
+.btn-danger {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: none;
+  background-color: transparent;
+  color: #ef4444;
+  border: 1px solid #ef4444;
+}
+
+.btn-danger:hover {
+  background-color: rgba(239, 68, 68, 0.1);
 }
 
 .btn-icon {
@@ -840,12 +964,38 @@ watch(filePairs, () => {
   opacity: 1;
 }
 
-.file-thumb {
+.file-thumb-wrapper {
   width: 48px;
   height: 48px;
-  object-fit: cover;
   border-radius: 4px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.file-thumb {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
   background-color: #334155;
+}
+
+.file-thumb-error {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #334155;
+  color: #64748b;
+}
+
+.remove-file {
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.file-item:hover .remove-file {
+  opacity: 1;
 }
 
 .file-info {
@@ -900,6 +1050,16 @@ watch(filePairs, () => {
   max-width: 100%;
   object-fit: contain;
   border-radius: 8px;
+}
+
+.current-image-error {
+  height: 200px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: #64748b;
 }
 
 .tag-list-header {
