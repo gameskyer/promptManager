@@ -59,3 +59,11 @@ frontend/wailsjs/
 tmp/
 temp/
 *.tmp
+
+# Test files (static resources)
+test_*.png
+test_*.jpg
+test_*.txt
+0001_*.*
+ComfyUI_*.txt
+ComfyUI_*.png
