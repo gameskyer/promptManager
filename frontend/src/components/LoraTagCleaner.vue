@@ -173,6 +173,15 @@
                 <ClipboardDocumentListIcon class="w-4 h-4" />
                 粘贴
               </button>
+              <button 
+                class="btn-text primary" 
+                @click="showAITranslateDialog" 
+                title="使用AI批量翻译TAG"
+                :disabled="isTranslating"
+              >
+                <SparklesIcon class="w-4 h-4" :class="{ 'animate-spin': isTranslating }" />
+                {{ isTranslating ? '翻译中...' : 'AI翻译' }}
+              </button>
             </div>
             <div class="actions-right">
               <button class="btn-text danger" @click="clearAllTags" title="清空所有 TAG">
@@ -272,6 +281,67 @@
       </div>
     </div>
 
+    <!-- AI翻译对话框 -->
+    <div v-if="showTranslateDialog" class="modal-overlay" @click.self="closeTranslateDialog">
+      <div class="modal-content translate-dialog">
+        <div class="modal-header">
+          <h3>AI翻译TAG</h3>
+          <button class="btn-icon" @click="closeTranslateDialog">
+            <XMarkIcon class="w-5 h-5" />
+          </button>
+        </div>
+        <div class="modal-body">
+          <div class="translate-info">
+            <p>将使用AI模型批量翻译当前所有未翻译的TAG</p>
+            <p class="translate-stats">
+              待翻译: <strong>{{ pendingTranslateCount }}</strong> 个TAG
+            </p>
+          </div>
+          
+          <div class="form-group">
+            <label>选择AI模型</label>
+            <div v-if="aiProviders.length === 0" class="empty-hint">
+              暂无可用的AI模型，请先配置
+            </div>
+            <div v-else class="provider-list">
+              <div
+                v-for="provider in enabledAIProviders"
+                :key="provider.id"
+                class="provider-option"
+                :class="{ active: selectedProvider?.id === provider.id }"
+                @click="selectProvider(provider)"
+              >
+                <div class="provider-info">
+                  <span class="provider-name">{{ provider.name }}</span>
+                  <span class="provider-model">{{ provider.model }}</span>
+                </div>
+                <div v-if="selectedProvider?.id === provider.id" class="provider-check">
+                  <CheckIcon class="w-4 h-4" />
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div v-if="translateError" class="translate-error">
+            <ExclamationTriangleIcon class="w-4 h-4" />
+            {{ translateError }}
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-secondary" @click="closeTranslateDialog">取消</button>
+          <button 
+            class="btn-primary" 
+            @click="startAITranslate"
+            :disabled="!selectedProvider || isTranslating || pendingTranslateCount === 0"
+          >
+            <SparklesIcon v-if="!isTranslating" class="w-4 h-4" />
+            <span v-else class="spinner"></span>
+            {{ isTranslating ? '翻译中...' : '开始翻译' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- 上传对话框 -->
     <div v-if="showUploadDialog" class="modal-overlay" @click.self="showUploadDialog = false">
       <div class="modal-content">
@@ -352,7 +422,11 @@ import {
   ClipboardDocumentIcon,
   ClipboardDocumentListIcon,
   DocumentDuplicateIcon,
+  CheckIcon,
+  ExclamationTriangleIcon,
 } from '@heroicons/vue/24/outline'
+import { useAIStore } from '../stores/ai'
+import { storeToRefs } from 'pinia'
 
 // 文件对数据结构
 class FilePair {
@@ -386,6 +460,30 @@ const newTag = ref({
 
 // 快速添加 TAG 输入
 const quickAddTagText = ref('')
+
+// AI翻译相关状态
+const showTranslateDialog = ref(false)
+const isTranslating = ref(false)
+const selectedProvider = ref(null)
+const translateError = ref('')
+
+// AI Store
+const aiStore = useAIStore()
+const { providers: aiProviders } = storeToRefs(aiStore)
+
+// 启用的AI提供商
+const enabledAIProviders = computed(() => {
+  return aiProviders.value.filter(p => {
+    if (p.type === 'ollama') return true
+    return p.enabled && p.apiKey
+  })
+})
+
+// 待翻译的TAG数量
+const pendingTranslateCount = computed(() => {
+  if (!currentPair.value) return 0
+  return currentPair.value.tags.filter(t => !t.translation || t.translation.trim() === '').length
+})
 
 // 计算属性
 const currentPair = computed(() => {
@@ -901,6 +999,157 @@ function removeFilePair(index) {
 onUnmounted(() => {
   cleanupFilePairs()
 })
+
+// ========== AI翻译功能 ==========
+
+// 显示AI翻译对话框
+async function showAITranslateDialog() {
+  // 初始化AI Store
+  await aiStore.init()
+  
+  // 默认选中当前配置的提供商
+  if (aiStore.currentProvider) {
+    selectedProvider.value = aiStore.currentProvider
+  } else if (enabledAIProviders.value.length > 0) {
+    selectedProvider.value = enabledAIProviders.value[0]
+  }
+  
+  translateError.value = ''
+  showTranslateDialog.value = true
+}
+
+// 关闭翻译对话框
+function closeTranslateDialog() {
+  if (isTranslating.value) return
+  showTranslateDialog.value = false
+  selectedProvider.value = null
+  translateError.value = ''
+}
+
+// 选择提供商
+function selectProvider(provider) {
+  selectedProvider.value = provider
+}
+
+// 开始AI翻译
+async function startAITranslate() {
+  if (!selectedProvider.value || !currentPair.value) return
+  
+  isTranslating.value = true
+  translateError.value = ''
+  
+  try {
+    // 获取所有未翻译的TAG
+    const pendingTags = currentPair.value.tags.filter(t => !t.translation || t.translation.trim() === '')
+    
+    if (pendingTags.length === 0) {
+      alert('所有TAG已翻译完成')
+      closeTranslateDialog()
+      return
+    }
+    
+    // 构建AI配置
+    const config = {
+      provider: selectedProvider.value.id,
+      provider_type: selectedProvider.value.type,
+      api_key: selectedProvider.value.apiKey,
+      endpoint: selectedProvider.value.baseUrl,
+      model: selectedProvider.value.model,
+    }
+    
+    // 构建翻译提示词 - 英译中
+    const tagsToTranslate = pendingTags.map(t => t.tag).join('\n')
+    
+    // 自定义系统提示词 - 专门用于TAG英译中
+    const systemPrompt = `你是一个专业的AI绘画TAG翻译助手。请将用户提供的英文TAG翻译成简洁准确的中文。
+
+翻译要求：
+1. 使用AI绘画领域常用中文术语
+2. 翻译要简洁，一般不超过6个汉字
+3. 保持专业性和准确性
+4. 按输入顺序返回翻译结果
+
+请严格按以下JSON格式返回：
+{
+  "translations": ["翻译1", "翻译2", ...]
+}`
+    
+    // 使用ProcessAI进行翻译
+    const { ProcessAI } = await import('../lib/wailsjs/go/handlers/AIHandler')
+    
+    const response = await ProcessAI({
+      mode: 'translate',
+      prompt: tagsToTranslate,
+      config: config,
+      system_prompt: systemPrompt,
+      user_prompt_template: '{{input}}',
+    })
+    
+    if (!response.success) {
+      throw new Error(response.error || '翻译失败')
+    }
+    
+    // 解析翻译结果
+    let translations = []
+    const result = response.data
+    
+    if (result && result.translation) {
+      // 尝试从translation字段解析JSON
+      try {
+        // 先尝试直接解析
+        const parsed = JSON.parse(result.translation)
+        if (parsed.translations && Array.isArray(parsed.translations)) {
+          translations = parsed.translations
+        }
+      } catch (e) {
+        // 如果不是JSON格式，尝试从文本中提取JSON
+        const jsonMatch = result.translation.match(/\{[\s\S]*\}/)
+        if (jsonMatch) {
+          try {
+            const parsed = JSON.parse(jsonMatch[0])
+            if (parsed.translations && Array.isArray(parsed.translations)) {
+              translations = parsed.translations
+            }
+          } catch (e2) {
+            // 提取失败，按行分割
+            translations = result.translation.split('\n').filter(t => t.trim())
+          }
+        } else {
+          // 按行分割
+          translations = result.translation.split('\n').filter(t => t.trim())
+        }
+      }
+    }
+    
+    // 应用翻译结果
+    let translatedCount = 0
+    for (let i = 0; i < pendingTags.length && i < translations.length; i++) {
+      // 清理翻译结果（去除可能的序号、引号等）
+      let translation = translations[i].trim()
+      // 去除开头的序号如 "1. " 或 "- "
+      translation = translation.replace(/^\d+[\.\)\s]+/, '').replace(/^-\s*/, '')
+      // 去除引号
+      translation = translation.replace(/^["']|["']$/g, '')
+      
+      pendingTags[i].translation = translation
+      translatedCount++
+    }
+    
+    // 显示结果
+    if (translatedCount > 0) {
+      alert(`成功翻译 ${translatedCount} 个TAG`)
+      closeTranslateDialog()
+    } else {
+      translateError.value = '翻译结果解析失败，请重试'
+    }
+    
+  } catch (error) {
+    console.error('AI翻译失败:', error)
+    translateError.value = `翻译失败: ${error.message || '未知错误'}`
+  } finally {
+    isTranslating.value = false
+  }
+}
 </script>
 
 <style scoped>
@@ -1689,5 +1938,116 @@ onUnmounted(() => {
 
 .preview-size {
   color: #64748b;
+}
+
+/* AI翻译对话框 */
+.translate-dialog {
+  max-width: 480px;
+}
+
+.translate-info {
+  background-color: #1e293b;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 20px;
+}
+
+.translate-info p {
+  margin: 0;
+  color: #94a3b8;
+  font-size: 13px;
+}
+
+.translate-stats {
+  margin-top: 8px !important;
+  color: #e2e8f0 !important;
+}
+
+.translate-stats strong {
+  color: #0ea5e9;
+}
+
+.provider-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.provider-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background-color: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.provider-option:hover {
+  border-color: #0ea5e9;
+  background-color: #0f172a;
+}
+
+.provider-option.active {
+  border-color: #0ea5e9;
+  background-color: rgba(14, 165, 233, 0.1);
+}
+
+.provider-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.provider-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: #e2e8f0;
+}
+
+.provider-model {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.provider-check {
+  color: #0ea5e9;
+}
+
+.translate-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  background-color: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 8px;
+  color: #ef4444;
+  font-size: 13px;
+  margin-top: 16px;
+}
+
+.spinner {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
 }
 </style>
