@@ -427,6 +427,7 @@ import {
 } from '@heroicons/vue/24/outline'
 import { useAIStore } from '../stores/ai'
 import { storeToRefs } from 'pinia'
+import { ProcessAI } from '../lib/wailsjs/go/handlers/AIHandler.js'
 
 // 文件对数据结构
 class FilePair {
