@@ -1065,18 +1065,27 @@ async function startAITranslate() {
     console.log('【DEBUG】待翻译TAG:', tagsToTranslate)
     
     // 自定义系统提示词 - 专门用于TAG英译中
+    // 后端返回 TranslateResult 结构，我们将使用纯文本格式，每行一个翻译
     const systemPrompt = `你是一个专业的AI绘画TAG翻译助手。请将用户提供的英文TAG翻译成简洁准确的中文。
 
-翻译要求：
-1. 使用AI绘画领域常用中文术语
-2. 翻译要简洁，一般不超过6个汉字
-3. 保持专业性和准确性
-4. 按输入顺序返回翻译结果
+输入：每行一个英文TAG
+输出要求：
+1. 每行输出一个对应的中文翻译
+2. 保持与输入相同的顺序
+3. 使用AI绘画领域常用术语
+4. 翻译简洁，不超过6个汉字
+5. 只输出翻译结果，不要有序号、说明或其他内容
 
-请严格按以下JSON格式返回：
-{
-  "translations": ["翻译1", "翻译2", ...]
-}`
+示例：
+输入：
+solo
+1girl
+long hair
+
+输出：
+单人
+1个女孩
+长发`
     
     // 使用ProcessAI进行翻译
     console.log('【DEBUG】开始调用 ProcessAI...')
@@ -1114,48 +1123,36 @@ async function startAITranslate() {
       throw new Error('API 返回的 data 为空')
     }
     
-    // 情况1: 后端返回标准格式 {translation: "{...}"}
-    if (result.translation) {
-      console.log('【DEBUG】情况1: result.translation 存在:', result.translation)
+    // 情况1: 使用纯文本格式，从 result.translation 按行分割
+    if (result.translation && typeof result.translation === 'string') {
+      console.log('【DEBUG】从 result.translation 提取:', result.translation)
+      const text = result.translation.trim()
+      if (text) {
+        // 按行分割并清理
+        const lines = text.split('\n').map(l => l.trim()).filter(l => l)
+        // 去除序号（如 "1. " 或 "- "）
+        translations = lines.map(l => l.replace(/^\d+[\.\)\s]+/, '').replace(/^-\s*/, '').trim())
+        console.log('【DEBUG】提取到翻译:', translations)
+      }
+    }
+    
+    // 情况2: 如果 translation 是JSON数组字符串，尝试解析
+    if (translations.length === 0 && result.translation) {
       try {
         const parsed = JSON.parse(result.translation)
-        if (parsed.translations && Array.isArray(parsed.translations)) {
-          translations = parsed.translations
-          console.log('【DEBUG】从 translation 字段解析成功:', translations)
-        }
-      } catch (e) {
-        console.log('【DEBUG】translation 字段解析失败:', e.message)
-      }
-    }
-    
-    // 情况2: 后端直接返回了 {translations: [...]} 格式
-    if (translations.length === 0 && result.translations) {
-      console.log('【DEBUG】情况2: result.translations 存在:', result.translations)
-      if (Array.isArray(result.translations)) {
-        translations = result.translations
-        console.log('【DEBUG】从 result.translations 直接获取:', translations)
-      }
-    }
-    
-    // 情况3: result 本身就是数组
-    if (translations.length === 0 && Array.isArray(result)) {
-      console.log('【DEBUG】情况3: result 本身是数组')
-      translations = result
-    }
-    
-    // 情况4: result 是字符串，尝试解析
-    if (translations.length === 0 && typeof result === 'string') {
-      console.log('【DEBUG】情况4: result 是字符串')
-      try {
-        const parsed = JSON.parse(result)
-        if (parsed.translations && Array.isArray(parsed.translations)) {
-          translations = parsed.translations
-        } else if (Array.isArray(parsed)) {
+        if (Array.isArray(parsed)) {
           translations = parsed
+          console.log('【DEBUG】从JSON数组解析:', translations)
         }
       } catch (e) {
-        console.log('【DEBUG】字符串解析失败')
+        // 不是JSON数组，忽略
       }
+    }
+    
+    // 情况3: 兼容旧格式 {translations: [...]}
+    if (translations.length === 0 && result.translations && Array.isArray(result.translations)) {
+      translations = result.translations
+      console.log('【DEBUG】从 translations 字段获取:', translations)
     }
     
     console.log('【DEBUG】最终 translations:', translations)
@@ -1163,9 +1160,11 @@ async function startAITranslate() {
     // 应用翻译结果
     let translatedCount = 0
     console.log('【DEBUG】待应用翻译数量:', translations.length)
+    console.log('【DEBUG】pendingTags 数量:', pendingTags.length)
+    
     for (let i = 0; i < pendingTags.length && i < translations.length; i++) {
       // 清理翻译结果（去除可能的序号、引号等）
-      let translation = translations[i].trim()
+      let translation = String(translations[i]).trim()
       // 去除开头的序号如 "1. " 或 "- "
       translation = translation.replace(/^\d+[\.\)\s]+/, '').replace(/^-\s*/, '')
       // 去除引号
@@ -1180,7 +1179,7 @@ async function startAITranslate() {
       alert(`成功翻译 ${translatedCount} 个TAG`)
       closeTranslateDialog()
     } else {
-      translateError.value = '翻译结果解析失败，请重试'
+      translateError.value = `翻译结果解析失败，请重试。返回数据: ${JSON.stringify(result).substring(0, 200)}`
     }
     
   } catch (error) {
