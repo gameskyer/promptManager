@@ -110,6 +110,7 @@ promptManager/
 │       │   ├── 📄 SettingsModal.vue     # 设置弹窗
 │       │   ├── 📄 BackupModal.vue       # 备份弹窗
 │       │   ├── 📄 CompareModal.vue      # 版本对比弹窗
+│       │   ├── 📄 LoraTagCleaner.vue    # LoRA 标签清洗工具
 │       │   └── 📄 ...
 │       │
 │       ├── 📁 stores/           # Pinia 状态管理
@@ -141,7 +142,14 @@ promptManager/
 ├── 📁 logs/                    # 日志文件目录
 │   └── 📄 ai_requests.log      # AI 请求日志
 │
-├── 📁 plugin/                  # 插件目录（预留）
+├── 📁 plugin/                  # ComfyUI 插件目录
+│   └── 📁 prompt_manager/      # PromptManager ComfyUI 插件
+│       ├── 📄 __init__.py      # 插件入口
+│       ├── 📄 nodes.py         # 自定义节点定义
+│       ├── 📄 db_client.py     # SQLite 数据库访问
+│       ├── 📄 web_routes.py    # HTTP API 路由
+│       └── 📁 js/              # 前端扩展
+│           └── 📄 prompt_autocomplete.js  # 提示词自动补全
 │
 ├── 📁 build/                   # 构建输出目录
 │
@@ -330,6 +338,59 @@ promptManager/
 
 ---
 
+### 10. LoRA 标签清洗工具 (LoRA Tag Cleaner)
+
+**功能描述**：专为 LoRA 训练数据集设计的标签清洗和编辑工具
+
+| 功能 | 说明 |
+|------|------|
+| 批量上传 | 同时上传多张图片和对应的 TXT 标签文件 |
+| 文件匹配 | 自动匹配同名图片和标签文件（如 0001.jpg ↔ 0001.txt） |
+| TAG 编辑 | 添加、删除、编辑 TAG，支持拖拽排序 |
+| AI 翻译 | 使用配置的 AI 模型批量翻译英文 TAG 为中文 |
+| 快速添加 | 输入框快速添加新 TAG |
+| 复制粘贴 | 支持 TAG 列表的复制和粘贴操作 |
+| 应用到全部 | 将当前图片的 TAG 批量应用到所有图片 |
+| 全局 TAG 管理 | 右侧显示所有图片中的唯一 TAG，快速添加 |
+| ZIP 导出 | 导出清洗后的图片和标签为 ZIP 文件 |
+
+**界面布局**：
+- **左侧**：图片列表（支持缩略图预览）
+- **中间**：TAG 编辑区（TAG 输入、翻译、操作按钮）
+- **右侧**：全局 TAG 管理 + 新增 TAG 表单
+
+---
+
+### 11. ComfyUI 插件 (ComfyUI Plugin)
+
+**功能描述**：PromptManager 的 ComfyUI 扩展插件，提供直接的数据库访问和提示词辅助功能
+
+**安装位置**：`ComfyUI/custom_nodes/prompt_manager/`
+
+**核心功能**：
+
+| 功能 | 说明 |
+|------|------|
+| 自动补全 | 输入 `@` 触发提示词自动补全，支持关键词展开 |
+| 数据库直连 | 直接读取 PromptManager SQLite 数据库 |
+| 自定义节点 | 4 个自定义 ComfyUI 节点 |
+
+**自定义节点列表**：
+
+| 节点名称 | 功能 |
+|----------|------|
+| `PM CLIP文本编码` | 支持 `@keyword` 展开的 CLIP 编码器 |
+| `PM 文本` | 支持 `@keyword` 展开的纯文本节点 |
+| `PM 设置` | 配置 PromptManager 数据库路径 |
+| `PM 服务` | 启动/停止 HTTP API 服务 |
+
+**HTTP API 接口**：
+- `GET /promptmanager/atoms` - 获取所有原子词
+- `GET /promptmanager/categories` - 获取所有分类
+- `GET /promptmanager/search?q=xxx` - 搜索原子词
+
+---
+
 ## 🗄️ 数据模型详解
 
 ### Category（分类）
@@ -472,4 +533,4 @@ Wails 应用配置，定义应用名称、前端命令、输出文件名等。
 
 ---
 
-*最后更新：2026-04-09*
+*最后更新：2026-04-14*
