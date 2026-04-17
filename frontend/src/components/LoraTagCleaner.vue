@@ -1057,8 +1057,11 @@ async function startAITranslate() {
       model: selectedProvider.value.model,
     }
     
+    console.log('【DEBUG】AI配置:', JSON.stringify(config, null, 2))
+    
     // 构建翻译提示词 - 英译中
     const tagsToTranslate = pendingTags.map(t => t.tag).join('\n')
+    console.log('【DEBUG】待翻译TAG:', tagsToTranslate)
     
     // 自定义系统提示词 - 专门用于TAG英译中
     const systemPrompt = `你是一个专业的AI绘画TAG翻译助手。请将用户提供的英文TAG翻译成简洁准确的中文。
@@ -1075,7 +1078,7 @@ async function startAITranslate() {
 }`
     
     // 使用ProcessAI进行翻译
-    const { ProcessAI } = await import('../lib/wailsjs/go/handlers/AIHandler')
+    console.log('【DEBUG】开始调用 ProcessAI...')
     
     const response = await ProcessAI({
       mode: 'translate',
@@ -1085,6 +1088,16 @@ async function startAITranslate() {
       user_prompt_template: '{{input}}',
     })
     
+    console.log('【DEBUG】原始 response:', response)
+    
+    if (!response) {
+      throw new Error('API 返回空响应 (response is null/undefined)')
+    }
+    
+    console.log('【DEBUG】response.success:', response.success)
+    console.log('【DEBUG】response.error:', response.error)
+    console.log('【DEBUG】response.data:', response.data)
+    
     if (!response.success) {
       throw new Error(response.error || '翻译失败')
     }
@@ -1093,36 +1106,62 @@ async function startAITranslate() {
     let translations = []
     const result = response.data
     
-    if (result && result.translation) {
-      // 尝试从translation字段解析JSON
+    console.log('【DEBUG】result 对象:', result)
+    console.log('【DEBUG】result 类型:', typeof result)
+    
+    if (!result) {
+      throw new Error('API 返回的 data 为空')
+    }
+    
+    // 情况1: 后端返回标准格式 {translation: "{...}"}
+    if (result.translation) {
+      console.log('【DEBUG】情况1: result.translation 存在:', result.translation)
       try {
-        // 先尝试直接解析
         const parsed = JSON.parse(result.translation)
         if (parsed.translations && Array.isArray(parsed.translations)) {
           translations = parsed.translations
+          console.log('【DEBUG】从 translation 字段解析成功:', translations)
         }
       } catch (e) {
-        // 如果不是JSON格式，尝试从文本中提取JSON
-        const jsonMatch = result.translation.match(/\{[\s\S]*\}/)
-        if (jsonMatch) {
-          try {
-            const parsed = JSON.parse(jsonMatch[0])
-            if (parsed.translations && Array.isArray(parsed.translations)) {
-              translations = parsed.translations
-            }
-          } catch (e2) {
-            // 提取失败，按行分割
-            translations = result.translation.split('\n').filter(t => t.trim())
-          }
-        } else {
-          // 按行分割
-          translations = result.translation.split('\n').filter(t => t.trim())
-        }
+        console.log('【DEBUG】translation 字段解析失败:', e.message)
       }
     }
     
+    // 情况2: 后端直接返回了 {translations: [...]} 格式
+    if (translations.length === 0 && result.translations) {
+      console.log('【DEBUG】情况2: result.translations 存在:', result.translations)
+      if (Array.isArray(result.translations)) {
+        translations = result.translations
+        console.log('【DEBUG】从 result.translations 直接获取:', translations)
+      }
+    }
+    
+    // 情况3: result 本身就是数组
+    if (translations.length === 0 && Array.isArray(result)) {
+      console.log('【DEBUG】情况3: result 本身是数组')
+      translations = result
+    }
+    
+    // 情况4: result 是字符串，尝试解析
+    if (translations.length === 0 && typeof result === 'string') {
+      console.log('【DEBUG】情况4: result 是字符串')
+      try {
+        const parsed = JSON.parse(result)
+        if (parsed.translations && Array.isArray(parsed.translations)) {
+          translations = parsed.translations
+        } else if (Array.isArray(parsed)) {
+          translations = parsed
+        }
+      } catch (e) {
+        console.log('【DEBUG】字符串解析失败')
+      }
+    }
+    
+    console.log('【DEBUG】最终 translations:', translations)
+    
     // 应用翻译结果
     let translatedCount = 0
+    console.log('【DEBUG】待应用翻译数量:', translations.length)
     for (let i = 0; i < pendingTags.length && i < translations.length; i++) {
       // 清理翻译结果（去除可能的序号、引号等）
       let translation = translations[i].trim()
