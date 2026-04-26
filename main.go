@@ -112,6 +112,7 @@ func main() {
 	imageService := services.NewImageService(db)
 	backupService := services.NewBackupService(db)
 	batchService := services.NewBatchService(db)
+	transSessionService := services.NewTransSessionService(aiService)
 
 	// Initialize handlers
 	atomHandler := handlers.NewAtomHandler(atomService)
@@ -124,6 +125,7 @@ func main() {
 	imageHandler := handlers.NewImageHandler(imageService)
 	backupHandler := handlers.NewBackupHandler(backupService)
 	batchHandler := handlers.NewBatchHandler(batchService)
+	transSessionHandler := handlers.NewTransSessionHandler(transSessionService)
 
 	// Create app
 	app := NewApp()
@@ -151,6 +153,7 @@ func main() {
 			imageHandler,
 			backupHandler,
 			batchHandler,
+			transSessionHandler,
 		},
 	})
 

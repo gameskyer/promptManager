@@ -836,6 +836,20 @@ export namespace handlers {
 	        this.provider_id = source["provider_id"];
 	    }
 	}
+	export class SplitPromptRequest {
+	    text: string;
+	    direction: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new SplitPromptRequest(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.text = source["text"];
+	        this.direction = source["direction"];
+	    }
+	}
 	export class StarVersionRequest {
 	    version_id: number;
 	    starred: boolean;
@@ -848,6 +862,22 @@ export namespace handlers {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.version_id = source["version_id"];
 	        this.starred = source["starred"];
+	    }
+	}
+	export class TransSessionResponse {
+	    success: boolean;
+	    data?: any;
+	    error?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new TransSessionResponse(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.success = source["success"];
+	        this.data = source["data"];
+	        this.error = source["error"];
 	    }
 	}
 	export class TranslatePromptRequest {
@@ -866,6 +896,52 @@ export namespace handlers {
 	        this.config = this.convertValues(source["config"], services.AIConfig);
 	        this.system_prompt = source["system_prompt"];
 	        this.user_prompt_template = source["user_prompt_template"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class TranslateSingleRequest {
+	    text: string;
+	    direction: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new TranslateSingleRequest(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.text = source["text"];
+	        this.direction = source["direction"];
+	    }
+	}
+	export class TranslateWordsRequest {
+	    words: services.PromptWord[];
+	    direction: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new TranslateWordsRequest(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.words = this.convertValues(source["words"], services.PromptWord);
+	        this.direction = source["direction"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -1060,6 +1136,27 @@ export namespace services {
 		    }
 		    return a;
 		}
+	}
+	
+	export class PromptWord {
+	    id: string;
+	    original: string;
+	    translated: string;
+	    needs_trans: boolean;
+	    is_translated: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new PromptWord(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.original = source["original"];
+	        this.translated = source["translated"];
+	        this.needs_trans = source["needs_trans"];
+	        this.is_translated = source["is_translated"];
+	    }
 	}
 
 }

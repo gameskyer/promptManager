@@ -158,6 +158,16 @@
       <div class="menu-tree">
         <div
           class="menu-item"
+          :class="{ active: currentView === 'trans-session' }"
+          @click="selectTransSessionView"
+        >
+          <div class="menu-item-header">
+            <LanguageIcon class="w-4 h-4 icon text-emerald-400" />
+            <span class="item-label">提示词翻译</span>
+          </div>
+        </div>
+        <div
+          class="menu-item"
           :class="{ active: currentView === 'lora-tag-cleaner' }"
           @click="selectLoraTagCleanerView"
         >
@@ -225,6 +235,7 @@ import {
   SwatchIcon,
   DocumentTextIcon,
   SparklesIcon,
+  LanguageIcon,
 } from '@heroicons/vue/24/outline'
 import { useAppStore, useCategoryStore, useAtomStore, usePresetStore } from '../stores'
 import CategoryDialog from './CategoryDialog.vue'
@@ -403,6 +414,13 @@ function selectCategoryManagementView() {
 function selectLoraTagCleanerView() {
   currentView.value = 'lora-tag-cleaner'
   emit('view-change', 'lora-tag-cleaner')
+  appStore.setCategory(null)
+  appStore.setSubCategory(null)
+}
+
+function selectTransSessionView() {
+  currentView.value = 'trans-session'
+  emit('view-change', 'trans-session')
   appStore.setCategory(null)
   appStore.setSubCategory(null)
 }
