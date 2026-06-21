@@ -3,6 +3,9 @@
     <!-- 顶部工具栏 -->
     <div class="toolbar">
       <div class="toolbar-left">
+        <button class="btn-back" @click="$emit('back')" title="返回主界面">
+          <ChevronLeftIcon class="w-5 h-5" />
+        </button>
         <h2 class="title">
           <SparklesIcon class="w-5 h-5 text-amber-400" />
           LoRA 标签清洗工具
@@ -104,94 +107,97 @@
             </div>
           </div>
           
-          <!-- 快速添加 TAG -->
-          <div class="quick-add-tag">
-            <input
-              v-model="quickAddTagText"
-              type="text"
-              placeholder="输入新 TAG 按回车添加..."
-              class="quick-add-input"
-              @keyup.enter="addQuickTag"
-            />
-            <button class="btn-primary" @click="addQuickTag">
-              <PlusIcon class="w-4 h-4" />
-              添加
-            </button>
-          </div>
-          
-          <div class="tag-list-header">
-            <span class="col-tag">TAG</span>
-            <span class="col-trans">翻译</span>
-            <span class="col-action">操作</span>
-          </div>
-          
-          <div v-if="currentPair.tags.length > 0" class="tag-list">
-            <div
-              v-for="(element, index) in currentPair.tags"
-              :key="element.id"
-              class="tag-item"
-            >
-              <div class="drag-handle">
-                <Bars3Icon class="w-4 h-4" />
-              </div>
+          <!-- TAG 编辑区 -->
+          <div class="tag-edit-area">
+            <!-- 快速添加 TAG -->
+            <div class="quick-add-tag">
               <input
-                v-model="element.tag"
-                class="tag-input"
-                placeholder="输入 TAG"
-                @change="translateTag(index)"
+                v-model="quickAddTagText"
+                type="text"
+                placeholder="输入新 TAG 按回车添加..."
+                class="quick-add-input"
+                @keyup.enter="addQuickTag"
               />
-              <input
-                v-model="element.translation"
-                class="trans-input"
-                placeholder="翻译"
-                readonly
-              />
-              <button class="btn-icon danger" @click="removeTag(index)">
-                <XMarkIcon class="w-4 h-4" />
+              <button class="btn-primary" @click="addQuickTag">
+                <PlusIcon class="w-4 h-4" />
+                添加
               </button>
             </div>
-          </div>
-          
-          <div v-if="currentTagsList.length === 0" class="empty-tags">
-            <p>暂无 TAG</p>
-            <button class="btn-link" @click="addEmptyTag">添加第一个 TAG</button>
-          </div>
-          
-          <!-- TAG 列表操作栏 -->
-          <div v-if="currentTagsList.length > 0" class="tag-list-actions">
-            <div class="actions-left">
-              <span class="tag-count-info">
-                共 {{ currentTagsList.length }} 个 TAG
-              </span>
+            
+            <div class="tag-list-header">
+              <span class="col-tag">TAG</span>
+              <span class="col-trans">翻译</span>
+              <span class="col-action">操作</span>
             </div>
-            <div class="actions-center">
-              <button class="btn-text" @click="copyAllTags" title="复制 TAG 列表到剪贴板">
-                <ClipboardDocumentIcon class="w-4 h-4" />
-                复制
-              </button>
-              <button class="btn-text" @click="pasteTags" title="从剪贴板粘贴 TAG">
-                <ClipboardDocumentListIcon class="w-4 h-4" />
-                粘贴
-              </button>
-              <button 
-                class="btn-text primary" 
-                @click="showAITranslateDialog" 
-                title="使用AI批量翻译TAG"
-                :disabled="isTranslating"
+            
+            <div v-if="currentPair.tags.length > 0" class="tag-list">
+              <div
+                v-for="(element, index) in currentPair.tags"
+                :key="element.id"
+                class="tag-item"
               >
-                <SparklesIcon class="w-4 h-4" :class="{ 'animate-spin': isTranslating }" />
-                {{ isTranslating ? '翻译中...' : 'AI翻译' }}
-              </button>
+                <div class="drag-handle">
+                  <Bars3Icon class="w-4 h-4" />
+                </div>
+                <input
+                  v-model="element.tag"
+                  class="tag-input"
+                  placeholder="输入 TAG"
+                  @change="translateTag(index)"
+                />
+                <input
+                  v-model="element.translation"
+                  class="trans-input"
+                  placeholder="翻译"
+                  readonly
+                />
+                <button class="btn-icon danger" @click="removeTag(index)">
+                  <XMarkIcon class="w-4 h-4" />
+                </button>
+              </div>
             </div>
-            <div class="actions-right">
-              <button class="btn-text danger" @click="clearAllTags" title="清空所有 TAG">
-                <TrashIcon class="w-4 h-4" />
-                清空
-              </button>
-              <button class="btn-text primary" @click="applyTagsToAll" title="将当前 TAG 应用到所有图片">
-                <DocumentDuplicateIcon class="w-4 h-4" />
-                应用到全部
-              </button>
+            
+            <div v-if="currentTagsList.length === 0" class="empty-tags">
+              <p>暂无 TAG</p>
+              <button class="btn-link" @click="addEmptyTag">添加第一个 TAG</button>
+            </div>
+            
+            <!-- TAG 列表操作栏 -->
+            <div v-if="currentTagsList.length > 0" class="tag-list-actions">
+              <div class="actions-left">
+                <span class="tag-count-info">
+                  共 {{ currentTagsList.length }} 个 TAG
+                </span>
+              </div>
+              <div class="actions-center">
+                <button class="btn-text" @click="copyAllTags" title="复制 TAG 列表到剪贴板">
+                  <ClipboardDocumentIcon class="w-4 h-4" />
+                  复制
+                </button>
+                <button class="btn-text" @click="pasteTags" title="从剪贴板粘贴 TAG">
+                  <ClipboardDocumentListIcon class="w-4 h-4" />
+                  粘贴
+                </button>
+                <button 
+                  class="btn-text primary" 
+                  @click="showAITranslateDialog" 
+                  title="使用AI批量翻译TAG"
+                  :disabled="isTranslating"
+                >
+                  <SparklesIcon class="w-4 h-4" :class="{ 'animate-spin': isTranslating }" />
+                  {{ isTranslating ? '翻译中...' : 'AI翻译' }}
+                </button>
+              </div>
+              <div class="actions-right">
+                <button class="btn-text danger" @click="clearAllTags" title="清空所有 TAG">
+                  <TrashIcon class="w-4 h-4" />
+                  清空
+                </button>
+                <button class="btn-text primary" @click="applyTagsToAll" title="将当前 TAG 应用到所有图片">
+                  <DocumentDuplicateIcon class="w-4 h-4" />
+                  应用到全部
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -407,6 +413,8 @@
 <script setup>
 import { ref, computed, watch, nextTick, onUnmounted } from 'vue'
 import JSZip from 'jszip'
+
+const emit = defineEmits(['back'])
 import {
   SparklesIcon,
   FolderOpenIcon,
@@ -424,6 +432,7 @@ import {
   DocumentDuplicateIcon,
   CheckIcon,
   ExclamationTriangleIcon,
+  ChevronLeftIcon,
 } from '@heroicons/vue/24/outline'
 import { useAIStore } from '../stores/ai'
 import { storeToRefs } from 'pinia'
@@ -1307,6 +1316,27 @@ long hair
   transition: all 0.2s;
 }
 
+.btn-back {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  background-color: transparent;
+  border: 1px solid #334155;
+  color: #94a3b8;
+  cursor: pointer;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.btn-back:hover {
+  background-color: #1e293b;
+  color: #e2e8f0;
+  border-color: #475569;
+}
+
 .btn-icon:hover {
   background-color: #334155;
   color: #e2e8f0;
@@ -1334,7 +1364,7 @@ long hair
 .workspace {
   flex: 1;
   display: grid;
-  grid-template-columns: 240px 1fr 300px;
+  grid-template-columns: 2fr 5fr 3fr;
   overflow: hidden;
 }
 
@@ -1478,28 +1508,37 @@ long hair
 }
 
 .current-image {
-  padding: 16px;
+  flex: 5;
   display: flex;
   justify-content: center;
+  align-items: center;
   background-color: #1e293b;
   border-bottom: 1px solid #334155;
+  overflow: hidden;
 }
 
 .current-image img {
-  max-height: 200px;
+  max-height: 100%;
   max-width: 100%;
   object-fit: contain;
   border-radius: 8px;
 }
 
 .current-image-error {
-  height: 200px;
+  height: 100%;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 12px;
   color: #64748b;
+}
+
+.tag-edit-area {
+  flex: 5;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .tag-list-header {

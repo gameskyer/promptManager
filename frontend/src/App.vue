@@ -13,15 +13,15 @@
       <PresetList v-else-if="currentView === 'presets'" :selected-category="selectedPresetCategory" />
       <AtomManagement v-else-if="currentView === 'atom-management'" />
       <CategoryManagement v-else-if="currentView === 'category-management'" />
-      <LoraTagCleaner v-else-if="currentView === 'lora-tag-cleaner'" />
+      <LoraTagCleaner v-else-if="currentView === 'lora-tag-cleaner'" @back="currentView = 'atoms'" />
       <TransSession v-else-if="currentView === 'trans-session'" />
       
       <!-- Right Workbench -->
       <Workbench v-if="currentView === 'atoms'" />
     </div>
     
-    <!-- Bottom Timeline - 在原子词或预设视图中都可以显示 -->
-    <Timeline v-if="showTimeline" />
+    <!-- Bottom Timeline -->
+    <Timeline v-if="showTimeline && currentView !== 'lora-tag-cleaner'" />
   </div>
 </template>
 
